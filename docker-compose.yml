@@ -1,0 +1,43 @@
+version: "3.9"
+services:
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: debezium
+      MYSQL_DATABASE: alpes
+      MYSQL_USER: alpes
+      MYSQL_PASSWORD: alpes
+    command: ["mysqld","--server-id=223344","--log-bin=mysql-bin","--binlog_format=ROW","--binlog_row_image=FULL","--gtid_mode=ON","--enforce_gtid_consistency=ON"]
+    ports: ["3306:3306"]
+    volumes: [ "./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro" ]
+  pulsar:
+    image: apachepulsar/pulsar:3.1.2
+    command: bash -c "bin/pulsar standalone"
+    ports: ["6650:6650","8080:8080"]
+    volumes: [ "./connectors/pulsar:/pulsar/connectors" ]
+  api:
+    build: { context: ".", dockerfile: Dockerfile }
+    environment:
+      FLASK_APP: src/aeroalpes/api/app.py
+      DATABASE_URL: mysql+pymysql://alpes:alpes@mysql:3306/alpes
+      PULSAR_URL: pulsar://pulsar:6650
+    volumes: [ "./src:/app/src", "./data:/app/data" ]
+    depends_on: ["mysql","pulsar"]
+    ports: ["5001:5000"]
+  notificaciones:
+    build: { context: ".", dockerfile: Dockerfile }
+    command: ["python","-m","aeroalpes.modulos.comisiones.infraestructura.consumer"]
+    environment:
+      PULSAR_URL: pulsar://pulsar:6650
+      TOPIC_OUTBOX: persistent://public/default/alpes-mysql.alpes.outbox_event
+      EVENT_STORE: /app/data/events.jsonl
+    volumes: [ "./src:/app/src", "./data:/app/data" ]
+    depends_on: ["pulsar"]
+  commands:
+    build: { context: ".", dockerfile: Dockerfile }
+    command: ["python","-m","aeroalpes.modulos.comisiones.infraestructura.commands_consumer"]
+    environment:
+      PULSAR_URL: pulsar://pulsar:6650
+      TOPIC_CMDS: persistent://public/default/commands
+    volumes: [ "./src:/app/src" ]
+    depends_on: ["pulsar"]
