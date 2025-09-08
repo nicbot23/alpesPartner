@@ -341,5 +341,3 @@ Esto elimina contenedores, volúmenes (incluye offsets y topics locales del stan
 ## 🗒️ Notas finales
 
 - Este PoC está optimizado para **ambiente local** (Pulsar standalone, MySQL sin TLS).
-- En producción, usa credenciales seguras, TLS en broker y BD, y despliega Pulsar en modo cluster con almacenamiento duradero.
-- Si agregas más agregados/eventos, simplemente **apendea** en `outbox_event` y extiende consumidores según sea necesario.
