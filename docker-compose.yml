@@ -18,7 +18,7 @@ services:
   api:
     build: { context: ".", dockerfile: Dockerfile }
     environment:
-      FLASK_APP: src/aeroalpes/api/app.py
+      FLASK_APP: src/alpespartner/api/app.py
       DATABASE_URL: mysql+pymysql://alpes:alpes@mysql:3306/alpes
       PULSAR_URL: pulsar://pulsar:6650
     volumes: [ "./src:/app/src", "./data:/app/data" ]
@@ -26,7 +26,7 @@ services:
     ports: ["5001:5000"]
   notificaciones:
     build: { context: ".", dockerfile: Dockerfile }
-    command: ["python","-m","aeroalpes.modulos.comisiones.infraestructura.consumer"]
+    command: ["python","-m","alpespartner.modulos.comisiones.infraestructura.consumer"]
     environment:
       PULSAR_URL: pulsar://pulsar:6650
       TOPIC_OUTBOX: persistent://public/default/alpes-mysql.alpes.outbox_event
@@ -35,7 +35,7 @@ services:
     depends_on: ["pulsar"]
   commands:
     build: { context: ".", dockerfile: Dockerfile }
-    command: ["python","-m","aeroalpes.modulos.comisiones.infraestructura.commands_consumer"]
+    command: ["python","-m","alpespartner.modulos.comisiones.infraestructura.commands_consumer"]
     environment:
       PULSAR_URL: pulsar://pulsar:6650
       TOPIC_CMDS: persistent://public/default/commands

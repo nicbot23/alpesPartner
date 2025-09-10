@@ -45,7 +45,7 @@ La idea es que cada **comando** (`calcular` / `aprobar`) escribe en la BD y adem
 │       ├── pulsar-io-debezium-mysql-3.1.2.nar   # Conector Debezium para Pulsar
 │       └── debezium-mysql-outbox.json           # Config de la Source en Pulsar
 ├── src/
-│   └── aeroalpes/
+│   └── alpespartner/
 │       ├── api/app.py                           # Endpoints Flask
 │       ├── seedwork/aplicacion/mediador.py      # Dispatcher de comandos
 │       ├── seedwork/infraestructura/uow.py      # Unit of Work
@@ -231,7 +231,7 @@ docker logs -f $(docker ps -qf name=commands)
 ## 🔁 Flujo interno por endpoint (qué archivos toca)
 
 1) **POST /commissions/calculate**
-   - `src/aeroalpes/api/app.py` recibe el request y crea un `CrearComision`.
+   - `src/alpespartner/api/app.py` recibe el request y crea un `CrearComision`.
    - `seedwork/aplicacion/mediador.py` despacha el comando al handler.
    - `modulos/comisiones/aplicacion/comandos/crear_comision.py` llama a
      `modulos/comisiones/aplicacion/servicios/servicio_comisiones.py#calcular`.
