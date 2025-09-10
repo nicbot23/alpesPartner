@@ -6,10 +6,10 @@ import uuid
 
 @dataclass(frozen=True)
 class EventoDominio():
-    id: uuid.UUID = field(hash=True)
+    nombre: str = ""
+    id: uuid.UUID = field(default_factory=uuid.uuid4, hash=True)
     _id: uuid.UUID = field(init=False, repr=False, hash=True)
-    nombre:str 
-    fecha:datetime =  field(default=datetime.now())
+    fecha: datetime = field(default_factory=datetime.now)
 
     @classmethod
     def siguiente_id(self) -> uuid.UUID:

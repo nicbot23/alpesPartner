@@ -2,7 +2,6 @@ FROM python:3.11-slim
 WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-COPY src ./src
-ENV PYTHONPATH=/app/src
+COPY api_simple.py .
 EXPOSE 5000
-CMD ["flask","--app","src/alpespartner/api/app.py","run","--host","0.0.0.0","--port","5000"]
+CMD ["python", "api_simple.py"]

@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from alpespartner.seedwork.dominio.eventos import (EventoDominio)
 
@@ -7,10 +7,10 @@ class EventoComision(EventoDominio):
 
 @dataclass(frozen=True)
 class ComisionCalculada(EventoComision): 
-    commission_id:str; 
-    occurred_at:datetime
+    commission_id: str = ""
+    occurred_at: datetime = field(default_factory=datetime.now)
 
 @dataclass(frozen=True)
 class ComisionAprobada(EventoComision): 
-    commission_id:str; 
-    occurred_at:datetime
+    commission_id: str = ""
+    occurred_at: datetime = field(default_factory=datetime.now)

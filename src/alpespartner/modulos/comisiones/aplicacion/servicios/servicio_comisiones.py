@@ -1,17 +1,22 @@
 from alpespartner.seedwork.aplicacion.servicios.base import ServicioAplicacion
-from alpespartner.seedwork.infraestructura.uow import uow
+from alpespartner.config.uow import UnidadTrabajoSQLAlchemy
 from alpespartner.modulos.comisiones.infraestructura.repositorios_sqlalchemy import RepoComisionesSQLAlchemy
 
 class ServicioComisiones(ServicioAplicacion):
     
     def calcular(self, dto):
         """
-        Servicio actualizado para usar AgregacionRaiz y manejar eventos
+        Servicio actualizado para usar UoW con eventos CDC
         """
-        with uow() as s:
-            repo = RepoComisionesSQLAlchemy(s)
+        from alpespartner.modulos.comisiones.infraestructura.repositorios_eventos import RepositorioEventosComisionSQLAlchemy
+        
+        def repositorio_eventos_func():
+            return RepositorioEventosComisionSQLAlchemy()
+        
+        with UnidadTrabajoSQLAlchemy() as uow:
+            repo = RepoComisionesSQLAlchemy(uow)
             
-            # Crear comisión que ahora hereda de AgregacionRaiz
+            # Crear comisión que ahora hereda de AgregacionRaiz y registra eventos
             commission_id = repo.crear_desde_datos(
                 dto.conversionId, 
                 dto.affiliateId, 
@@ -20,21 +25,27 @@ class ServicioComisiones(ServicioAplicacion):
                 dto.currency
             )
             
-            # El agregado ahora registra eventos automáticamente
-            # Los eventos se capturarán en el UoW commit con repositorio_eventos_func
+            # Confirmar transacción con manejo de eventos CDC
+            uow.commit(repositorio_eventos_func=repositorio_eventos_func)
             
             return {'commissionId': commission_id}
     
     def aprobar(self, commission_id: str):
         """
-        Servicio de aprobación actualizado para manejar eventos
+        Servicio de aprobación actualizado para manejar eventos CDC
         """
-        with uow() as s:
-            repo = RepoComisionesSQLAlchemy(s)
+        from alpespartner.modulos.comisiones.infraestructura.repositorios_eventos import RepositorioEventosComisionSQLAlchemy
+        
+        def repositorio_eventos_func():
+            return RepositorioEventosComisionSQLAlchemy()
+            
+        with UnidadTrabajoSQLAlchemy() as uow:
+            repo = RepoComisionesSQLAlchemy(uow)
             
             # Aprobar comisión - esto generará evento ComisionAprobada
             repo.aprobar(commission_id)
             
-            # Los eventos se registrarán automáticamente en el agregado
+            # Confirmar transacción con manejo de eventos CDC
+            uow.commit(repositorio_eventos_func=repositorio_eventos_func)
             
             return {'ok': True}

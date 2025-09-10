@@ -24,14 +24,40 @@ class UnidadTrabajoSQLAlchemy(UnidadTrabajo):
     def batches(self) -> list[Batch]:
         return self._batches             
 
-    def commit(self):
+    def commit(self, repositorio_eventos_func=None):
+        """
+        Commit actualizado para soportar eventos CDC
+        """
+        # Ejecutar batches normales
         for batch in self.batches:
             lock = batch.lock
             batch.operacion(*batch.args, **batch.kwargs)
+        
+        # Obtener y procesar eventos si se proporciona función de repositorio de eventos
+        if repositorio_eventos_func:
+            eventos = self._obtener_eventos()
+            if eventos:
+                repo_eventos = repositorio_eventos_func()
+                for evento in eventos:
+                    repo_eventos.agregar(evento)
                 
         db.session.commit() # Commits the transaction
 
         super().commit()
+
+    def _obtener_eventos(self):
+        """
+        Obtiene eventos de todos los agregados que han sido tocados en esta transacción
+        """
+        eventos = []
+        
+        # Buscar en objetos de la sesión que implementen AgregacionRaiz
+        for obj in db.session.identity_map.all_states():
+            if hasattr(obj, 'eventos') and callable(getattr(obj, 'limpiar_eventos', None)):
+                eventos.extend(obj.eventos)
+                obj.limpiar_eventos()
+                
+        return eventos
 
     def rollback(self, savepoint=None):
         if savepoint:
@@ -45,3 +71,6 @@ class UnidadTrabajoSQLAlchemy(UnidadTrabajo):
         # TODO Con MySQL y Postgres se debe usar el with para tener la lógica del savepoint
         # Piense como podría lograr esto ¿tal vez teniendo una lista de savepoints y momentos en el tiempo?
         ...
+
+# Alias para facilitar importación en comandos
+UnidadTrabajoPuerto = UnidadTrabajoSQLAlchemy
