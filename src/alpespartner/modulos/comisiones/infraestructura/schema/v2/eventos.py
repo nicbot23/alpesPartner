@@ -1,14 +1,39 @@
 from pulsar.schema import *
-from alpespartner.seedwork.infraestructura.schema.v1.eventos import EventoIntegracion
+from alpespartner.seedwork.infraestructura.schema.v2.eventos import EventoIntegracion
 from alpespartner.seedwork.infraestructura.utils import unix_time_millis
 import uuid
 
+from pulsar.schema import Record
+from alpespartner.seedwork.infraestructura.schema.v1.mensajes import Mensaje
+
 class ComisionCalculadaPayload(Record):
-    commission_id = String()
-    occurred_at = Long()
+    commission_id = str()
+    conversion_id = str()
+    affiliate_id = str()
+    campaign_id = str()
+    gross_amount = str()  # JSON serialized amount object
+    percentage = float()
+    net_amount = str()   # JSON serialized amount object
+    occurred_at = int()
+
+class ComisionAprobadaPayload(Record):
+    commission_id = str()
+    conversion_id = str()
+    affiliate_id = str()
+    campaign_id = str()
+    approved_at = int()
+
+class EventoComisionCalculada(Mensaje):
+    data: ComisionCalculadaPayload = None
+
+class EventoComisionAprobada(Mensaje):
+    data: ComisionAprobadaPayload = None
 
 class ComisionAprobadaPayload(Record):
     commission_id = String()
+    conversion_id = String()
+    affiliate_id = String()
+    campaign_id = String()
     approved_at = Long()
 
 class EventoComisionCalculada(EventoIntegracion):

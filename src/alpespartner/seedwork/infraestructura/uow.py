@@ -49,8 +49,10 @@ class UnidadTrabajo(ABC):
         for batch in batches:
             for arg in batch.args:
                 if isinstance(arg, AgregacionRaiz):
-                    print(arg.eventos)
-                    return arg.eventos
+                    return arg.eventos  # Usar nueva propiedad
+                # Mantener compatibilidad hacia atrás
+                elif hasattr(arg, '_eventos'):
+                    return getattr(arg, '_eventos', [])
         return list()
 
     @abstractmethod
@@ -160,7 +162,7 @@ class UnidadTrabajoPuerto:
         return uow.savepoints()
 
     @staticmethod
-    def registrar_batch(operacion, *args, lock=Lock.PESIMISTA, **kwargs):
+    def registrar_batch(operacion, *args, lock=Lock.PESIMISTA, repositorio_eventos_func=None, **kwargs):
         uow = unidad_de_trabajo()
-        uow.registrar_batch(operacion, *args, lock=lock, **kwargs)
+        uow.registrar_batch(operacion, *args, lock=lock, repositorio_eventos_func=repositorio_eventos_func, **kwargs)
         guardar_unidad_trabajo(uow)
