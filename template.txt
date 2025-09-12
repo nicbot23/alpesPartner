@@ -1,0 +1,216 @@
+
+--- PÁGINA 1 ---
+MISO
+Maestría en Ingeniería deSoftwareEntrega 3 –Atributos con sus 
+escenarios de calidad
+Integrantes :
+-Sergio Mena
+-Leonel Fonseca
+-Julian Roa
+-Nicolas Ibarra
+
+--- PÁGINA 2 ---
+Links para elPoC
+-Github Repositorio de PoC: https://github.com/nicbot23/alpesPartner
+-Link al video explicativo : MISO.mp4
+
+--- PÁGINA 3 ---
+Atributo de calidad 1: Disponibilidad
+Escenario de calidad : Falla de microservicio encampaña
+Escenario #: 1 Falla de microservicio encampaña
+Fuente Cliente global de marca o de agencia
+Estímulo El cliente consulta campañas y falla la nueva ruta
+Ambiente En produccion enoperacion normal donde convive monolito y microservicio
+Artefacto Servicio de campañas (Api Gateway y Router Strangler y servicio de campañas )
+Respuesta Reencaminamiento transitorio al endpoint del monolito sin cortar la sesión de consulta
+Medida de la respuesta Recuperación del servicio enmenos de 30 segundos , sin perdida de datos con un rate menor al 1% 
+Decisiones Arquitecturales Punto de sensibilidad Tradeoff Riesgo
+Strangler Fig (proxy inverso /routing porpaths) para migración
+segura de endpoints.Tiempo de detección de fallo (health check interval/threshold) Doble mantenimiento de rutas y contratos durante la transición Divergencia de lógica entre v2 y monolito -> respuestas distintas
+Health Checks activos y circuit breakers a nivel de servicio . Latencia adicional porsalto al monolito (picos porsalto al monolito )Complejidad de observabilidad hacia elmonolito y su
+funcionamiento .Falback que retarde la desactivación del monolito
+Multi -AZ para elservicio migrado ; fallback temporal al monolíto
+JustificaciónEvitara caidas visibles al usuario durante la migración , yaque la consulta sigue porelre encaminamiento de la ruta
+aunque falle la version del microservicio y asimismo recupera la capacidad de consulta dentro de 30 segundos mientras
+se arregla elmicroservicio .
+Diagrama de arquitectura <Diagrama o diagramas que sirvan como acompañamiento de la justificación dada anteriormente >
+
+--- PÁGINA 4 ---
+
+
+--- PÁGINA 5 ---
+Atributo de calidad 1: Disponibilidad
+Escenario de calidad : Blindaje para elmodulo de pagos
+Escenario #: 2 Blindaje para elmodulo de pagos
+Fuente Finanzas /Motor de pagos
+Estímulo Caida de la base de datos primaria enplena liquidacion
+Ambiente Producción , enpico transaccional
+Artefacto Sistema de pagos con Transactional outbox + CDC 
+RespuestaLas confirmaciones yaescritas se perseveran ; se drenan desde outbox via CDC al broker; base replica asume primario sin 
+perder pagos
+Medida de la respuestaObjetivo de punto de recuperación menor o igual a 60 segundos . (cada evento confirmado aparece eneltopico menor o 
+igual a 60 segundos despues de persistirse enoutbox)
+Decisiones Arquitecturales Punto de sensibilidad Tradeoff Riesgo
+Transactional outbox + CDC Latencia CDC (lag del changelog) Operación de conectores (tuning y monitoreo ) Desalineación de esquema (roturas enCDC)
+DB multi –AZ con failover administrado Tamaño /retención de outbox Overhead de escritura doble ( modelo + outbox) Backlog siconsumidores se atrasan
+Idempotencia enconsumidores Velocidad de failover
+JustificaciónCDC + Outbox eliminaria acoplamientos directos y elobjetivo de punto de recuperacion cuantifica las no confrimaciones
+sin mezclar metricas
+Diagrama de arquitectura <Diagrama o diagramas que sirvan como acompañamiento de la justificación dada anteriormente >
+
+--- PÁGINA 6 ---
+
+
+--- PÁGINA 7 ---
+Atributo de calidad 1: Disponibilidad
+Escenario de calidad : Sobrecarga enblackfriday
+Escenario #: 3 Sobrecarga enblackfriday
+Fuente Usuarios y partners globals globales
+Estímulo Black Friday ( pico de concurrencia al máximo )
+Ambiente Producción enconcurrencia máxima ingestion poreventos
+Artefacto Sistema enAPI Edge + Event Gateway + Broker (Apache Pulsar) 
+Respuesta El broker equilibra lospicos , losproductores no se bloquean ; losconsumidores escalan horizontalmente sin downtime
+Medida de la respuestaUn 99.95% de transacciones de la API enmenos o igual a 2 segundos mientras se procesan N cantidad de eventos por
+minuto .
+Decisiones Arquitecturales Punto de sensibilidad Tradeoff Riesgo
+Back -pressure controlado enbroker y autoescalado de 
+consumidoresThroughput y particiones del broker Costos variables enpicos y complejidad operativa del broker Saturación de particiones mal dimensionadas
+DLQ y replay porpartición Warm -up de consumidores Mayor complejidad oeprativa TTL de topicos insuficientes para retry
+Cuotas /rate-limits enelEdge para evitar cascadas Limites de rate -limit y politicas de retry
+JustificaciónAl utilizar eventos con broker permitira desacoplar y equilibra picos de transacciones , asimismo soporta crecimiento
+mayor o igual a la linea base de 80k a 200k porminuto
+Diagrama de arquitectura <Diagrama o diagramas que sirvan como acompañamiento de la justificación dada anteriormente >
+
+--- PÁGINA 8 ---
+
+
+--- PÁGINA 9 ---
+Atributo de calidad 2: Escalabilidad
+Escenario de calidad : Captura de 200k interacciones /min
+Escenario #: 4 ingesta elastica de interacciones
+Fuente Clientes
+Estímulo Escenario de campaña activa con ingesta que llega a mas de 200k eventos /min
+Ambiente En producción con operacion alta enpicos de ingestion
+Artefacto Sistema de captura de interacciones
+Respuesta Se registra e ingesta sin rechazos
+Medida de la respuesta Throughput ≥ 200k/min
+Decisiones Arquitecturales Punto de sensibilidad Tradeoff Riesgo
+particionado pordominio (topico porinteraccion eleccion de partition key entre mas particiones mas gestion y mayor costo Reordenamiento siparticionado pobre
+Auto scaling del colector y de consumidores metrica de escalado
+Back pressure retencion y tamaño de batch
+JustificaciónPara que eltracking sea confiable no se pueden perder interacciones Con ≥200k/min y disponibilidad de datos en≤60 s, 
+soportamos campañas globales sin saturar .
+Diagrama de arquitectura En la siguiente diapositiva
+
+--- PÁGINA 10 ---
+
+
+--- PÁGINA 11 ---
+Atributo de calidad 2: Escalabilidad
+Escenario de calidad : Onboarding masivo sin saturar operaciones
+Escenario #: 5 Alta masiva sin friccion
+Fuente Nuevos afiliados /creadores
+Estímulo 5000 transaccioens en10 minutos
+Ambiente Operacion normal con pico puntual
+Artefacto Sistema de  registro y habilitacion (onboarding e2e)
+Respuesta altas completadas end-to-end sin colas bloqueantes
+Medida de la respuesta P95 de alta ≤ 2 min
+Decisiones Arquitecturales Punto de sensibilidad Tradeoff Riesgo
+Orquestacion poreventos para pasos asicronos Sla de externos kyc/email Complejidad de flujos y observabilidadEfecto domino sin un externo degrada efectuaria colas mal 
+calibradas
+Colas porpaso con timeouts/retries y compensaciones Retries y compensaciones Sesgo enmarcas gigantes
+Limite de concurrencia para modulos externos concurrencia maxima porpaso Costes inesperados
+JustificaciónEl negocio crece poronboarding elpercentil 95 menor o igual a 2 minutos sostiene conversion y evita abandono sin 
+saturar dependencias
+Diagrama de arquitectura Siguiente diapositiva
+
+--- PÁGINA 12 ---
+
+
+--- PÁGINA 13 ---
+Atributo de calidad 2: Escalabilidad
+Escenario de calidad : Consultas de ROI/Panel triplican la demanda
+Escenario #: 6 Dashboards entiempo casi real
+Fuente Analistas o Marcas
+Estímulo usuarios concurrentes endashboards
+Ambiente Operacion enpico de lectura
+Artefacto Sistemas de consultas analiticas
+Respuesta Paneles responden fluidos con datos casi entiempo real
+Medida de la respuesta P95 ≤ 200 ms
+Decisiones Arquitecturales Punto de sensibilidad Tradeoff Riesgo
+CQRS con materialized views Frecuencia de actualziacion de vistas Mas almacenamiento y consistencia eventualDesfase que confunda decisiones sino se comunica el
+cestancamineto
+Cache distribuido / OLAP para agregados Costo de almacenamiento porcardinalidad Alacenar outbox incrementa costo enI/O y storage Duplicidad de eventos sihay idempotencia mal aplicada
+CDC/ changelog para alimentar proyecciones Estrategia de cache/ expiracion Posible fail -fast visible Existencia de cascadas sino se calibran lostiempos
+Justificación Con P95 ≤ 200 msy staleness ≤ 5 s, losequipos ajustan campañas con confianza sin cargar elplano de escritura .
+Diagrama de arquitectura Siguiente diapositiva
+
+--- PÁGINA 14 ---
+
+
+--- PÁGINA 15 ---
+Atributo de calidad 3: Mantenibilidad
+Escenario de calidad : Comisiones separadas ensucarril
+Escenario #: 7 Cambiar regla de comsion sin afecar otros dominios
+Fuente CFO/ producto
+Estímulo Nueva formula de comision (vigencia inmediata para campaña /tier)
+Ambiente Operación activa
+Artefacto Componente calculo de comisiones
+Respuesta Se despliega respuesta A/B y activa sin coordinar con otros equipos
+Medida de la respuesta Lead time ≤ 24 h , error de cálculo ≤ 0.1%, 0 regresiones enotros dominios .
+Decisiones Arquitecturales Punto de sensibilidad Tradeoff Riesgo
+DDD y hexagonal ( puertos /adaptadores ) y 
+CQSContratos /eventos versionados Mas contratos y pipelines disciplina de flagsCambia semanticos rompen consumidores y 
+deuda sino se retiran flags
+Eventos de dominios versionados Cobertura de pruebas de regresion /contrato
+Feature flags para activaciomn segura Gestion y caducidad de feature flags
+JustificaciónEl negocio necesita mover tarifas rapido sin romper pagos /reportes . Con Lead time ≤ 24 h y 0.1% de error protegemos
+finanzas y habilitamos innovación continua.
+Diagrama de arquitectura Siguiente diapositiva
+
+--- PÁGINA 16 ---
+
+
+--- PÁGINA 17 ---
+Atributo de calidad 3: Mantenibilidad
+Escenario de calidad : rollback enproduccion
+Escenario #: 8 Revertir una version defectuosa sin downtime
+Fuente DevOps/QA
+Estímulo Degradacion detectada tras un release de campañas
+Ambiente Produccion
+Artefacto Sistema de gestion de releases (CI/CD y control de trafico )
+Respuesta Reversion inmediata a version estable sin perdida de datos
+Medida de la respuesta MTTR ≤ 5 min , 0 min de indisponibilidad , error rate post -rollback ≤ 0.1%.
+Decisiones Arquitecturales Punto de sensibilidad Tradeoff Riesgo
+Blue/green + canary Sincronizacion de datos blue/greenInfra duplicada temporalmente con mayor 
+disciplina de esquemasMigracion irreversible con canary insuficiente
+para edge cases
+Migraciones expand/contractDuracion de migraciones
+Smoke tests automaticosUmbrales de auto -rollback
+JustificaciónEntregamos a alta cadencia y elriesgo operativo debe ser bajo : un MTTR ≤ 5 min evita incidentes largos sin frenar la 
+evolución del producto .
+Diagrama de arquitectura Siguiente diapositiva
+
+--- PÁGINA 18 ---
+
+
+--- PÁGINA 19 ---
+Atributo de calidad 3: Mantenibilidad
+Escenario de calidad : Integrar un nuevo CRM sin tocar elcore
+Escenario #: 9 integrar nuevo CRM sin tocar elcore
+Fuente Lider de integraciones B2B
+Estímulo Nueva integracion de CRM partner
+Ambiente Operacion norma con tenerco nuevo
+Artefacto Componente adaptador /embajador (anti -corrupcion ) + outbox de integraciones
+Respuesta Publicar /consumir eventos estandares sin cambios encore
+Medida de la respuesta Time -to-first-event ≤ 1 semana ; equipos afectados ≤ 2; 0 cambios encontratos internos de core.
+Decisiones Arquitecturales Punto de sensibilidad Tradeoff Riesgo
+Anticorruption layer Cobertura de mapeos Trabajo ectra porintegracion Divergencia semantica
+Evento de integracion gordos y estandar Granularidad /payload Overhead de red
+Outbox enintegraciones Orden y paticionamiento porpartnerIId Persistencia adicional Reordenamiento siparticionado pobre
+JustificaciónLo que no se mide , no se cumple . Con trazas pordominio y alertas tempranas , evitamos violar elSLA 24 h y reducimos
+MTTD, acelerando correcciones antes de afectar ingresos .
+Diagrama de arquitectura Siguiente diapositiva
+
+--- PÁGINA 20 ---
+
