@@ -1,65 +1,154 @@
-# PoC — Comisiones con DDD + Outbox (MySQL) + Debezium + Apache Pulsar
+# 🚀 AlpesPartner - Comisiones con CDC Pattern
 
-Este **Proof of Concept (PoC)** demuestra un flujo CQRS/Outbox de comisiones usando:
-- **API Flask** (Capa de Aplicación)
-- **MySQL 8** (Persistencia + tabla `outbox_event`)
-- **Debezium** (captura de cambios del outbox)
-- **Apache Pulsar 3.1.2** (broker de eventos)
-- **Servicio de Notificaciones** (suscriptor que persiste eventos en un archivo)
+Sistema de comisiones usando **Change Data Capture (CDC)** con patrón Outbox para garantizar consistencia transaccional entre base de datos y eventos.
 
-La idea es que cada **comando** (`calcular` / `aprobar`) escribe en la BD y además **registra un evento** en `alpes.outbox_event`. Debezium detecta el cambio y lo publica en Pulsar. Desde Pulsar, otros servicios (p. ej. Notificaciones) reaccionan.
+## 📋 Stack Tecnológico
+
+- **API**: Flask (Python)
+- **Base de datos**: MySQL 8 con binlog
+- **Tabla Outbox**: Para eventos transaccionales
+- **Message Broker**: Apache Pulsar 3.1.2
+- **CDC**: Simulador manual (Debezium alternativo)
+
+## 🏗️ Arqutectura
+
+```
+┌─────────┐    HTTP    ┌─────────┐    INSERT    ┌─────────┐    CDC    ┌─────────┐
+│ Cliente │ ────────> │   API   │ ──────────> │  MySQL  │ ────────> │ Pulsar  │
+└─────────┘           └─────────┘              └─────────┘           └─────────┘
+                                                    │
+                                              [outbox_event]
+                                               published: 0→1
+```
+
+## ⚡ Inicio Rápido
+
+### 1. **Clonar y ejecutar**
+```bash
+git clone <repo-url>
+cd alpesPartner
+
+# Levantar todos los servicios
+docker-compose up --build -d
+```
+
+### 2. **Verificar servicios**
+```bash
+docker-compose ps
+# Debe mostrar: api, mysql, pulsar funcionando
+```
+
+### 3. **Ejecutar pruebas automáticas**
+```bash
+./test-cdc-complete.sh
+```
+
+## 🔧 Endpoints API
+
+| Método | Endpoint | Descripción |
+|--------|----------|-------------|
+| `GET` | `/health` | Estado de la API |
+| `POST` | `/commissions/calculate` | Calcular comisión |
+| `POST` | `/commissions/approve` | Aprobar comisión |
+| `GET` | `/debug/outbox` | Ver eventos en outbox |
+
+## 📊 Ejemplo de Uso
+
+### Crear comisión:
+```bash
+curl -X POST http://localhost:5001/commissions/calculate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "conversionId": "conv-001",
+    "affiliateId": "aff-123",
+    "campaignId": "camp-456",
+    "grossAmount": 1000.00,
+    "currency": "USD"
+  }'
+```
+
+### Verificar eventos:
+```bash
+curl http://localhost:5001/debug/outbox
+```
+
+## 🎯 Flujo CDC Manual
+
+1. **Crear evento** → Se inserta en `outbox_event` con `published=0`
+2. **Ejecutar CDC** → `python manual_cdc.py` procesa eventos pendientes
+3. **Verificar Pulsar** → Eventos aparecen en topic `outbox-events`
+4. **Consumir** → `python consumer_cdc.py` lee eventos de Pulsar
+
+## 🧪 Scripts de Prueba
+
+- `test-cdc-complete.sh` - Prueba completa del flujo CDC
+- `manual_cdc.py` - Simulador CDC manual
+- `consumer_cdc.py` - Consumidor de eventos
+- `advanced_cdc_test.py` - Pruebas avanzadas con múltiples eventos
+
+## 📂 Estructura Simplificada
+
+```
+alpesPartner/
+├── docker-compose.yml     # Orquestación completa
+├── Dockerfile            # API Flask
+├── api_simple.py         # API principal
+├── requirements.txt      # Dependencias Python
+├── manual_cdc.py         # Procesador CDC
+├── consumer_cdc.py       # Consumidor eventos
+├── test-cdc-complete.sh  # Pruebas automáticas
+└── db/init.sql          # Schema inicial
+```
+
+## 🔍 Monitoreo en Tiempo Real
+
+### Ver eventos en Pulsar:
+```bash
+docker exec alpespartner-pulsar-1 bin/pulsar-client consume \
+  persistent://public/default/outbox-events -s live -n 0 -p Earliest
+```
+
+### Ver tabla outbox:
+```bash
+docker exec alpespartner-mysql-1 mysql -u alpes -palpes \
+  -e "SELECT * FROM outbox_event ORDER BY occurred_at DESC LIMIT 5;" alpes
+```
+
+### Logs de la API:
+```bash
+docker logs -f alpespartner-api-1
+```
+
+## ✅ Verificación de Estado
+
+1. **Servicios activos**: `docker-compose ps`
+2. **API funcionando**: `curl http://localhost:5001/health`
+3. **Base datos**: `docker exec alpespartner-mysql-1 mysql -u alpes -palpes -e "SHOW TABLES;" alpes`
+4. **Pulsar topics**: `docker exec alpespartner-pulsar-1 bin/pulsar-admin topics list public/default`
+
+## 🛠️ Troubleshooting
+
+- **API no responde**: Verificar `docker logs alpespartner-api-1`
+- **MySQL no conecta**: Esperar ~30s después de `docker-compose up`
+- **Sin eventos CDC**: Ejecutar `python manual_cdc.py` manualmente
+- **Pulsar no funciona**: Verificar puertos 6650 y 8080 libres
+
+## 📈 Resultados Esperados
+
+✅ Comisiones se crean correctamente  
+✅ Eventos se insertan en `outbox_event`  
+✅ CDC procesa eventos (`published: 0→1`)  
+✅ Eventos llegan a Pulsar topic  
+✅ Consumidores reciben eventos en tiempo real
 
 ---
 
-## 🧭 Arquitectura (alto nivel)
-
-```
-+-----------+      Comandos HTTP       +--------+      INSERT + OUTBOX      +---------+       CDC        +--------+
-|   Client  |  ---------------------->  |  API   |  --------------------->   | MySQL   |  ----------->   | Pulsar |
-+-----------+                          +--------+                            +---------+                 +--------+
-                                                                                                             |
-                                                                                                             v
-                                                                                                     +-----------------+
-                                                                                                     | Notificaciones  |
-                                                                                                     | (suscriptor)    |
-                                                                                                     +-----------------+
-```
-
-- **API** recibe comandos y hace `INSERT/UPDATE` de la comisión y **apendea** en `outbox_event`.
-- **Debezium** (conector MySQL) captura los cambios de `alpes.outbox_event` y los envía a **Pulsar**.
-- **Notificaciones** consume el tópico y persiste un log (`data/events.jsonl`) o imprime en consola.
+**🎉 ¡Sistema CDC funcionando completamente!**
 - **CQS**: consultas HTTP leen directamente de MySQL (no pasan por Pulsar).
 
 ---
 
-## 🗂️ Estructura del proyecto (resumen)
-
-```
-.
-├── docker-compose.yml
-├── Dockerfile
-├── db/
-│   └── init.sql                 # Crea BD/tables/índices mínimos
-├── connectors/
-│   └── pulsar/
-│       ├── pulsar-io-debezium-mysql-3.1.2.nar   # Conector Debezium para Pulsar
-│       └── debezium-mysql-outbox.json           # Config de la Source en Pulsar
-├── src/
-│   └── alpespartner/
-│       ├── api/app.py                           # Endpoints Flask
-│       ├── seedwork/aplicacion/mediador.py      # Dispatcher de comandos
-│       ├── seedwork/infraestructura/uow.py      # Unit of Work
-│       ├── modulos/comisiones/
-│       │   ├── aplicacion/comandos/crear_comision.py
-│       │   ├── aplicacion/comandos/aprobar_comision.py
-│       │   ├── aplicacion/servicios/servicio_comisiones.py
-│       │   ├── dominio/entidades.py / eventos.py
-│       │   └── infraestructura/
-│       │       ├── consumer.py                  # Servicio notificaciones (suscriptor)
-│       │       └── commands_consumer.py         # (opcional) consumidor de comandos
-└── data/
-    └── events.jsonl                             # Salida del servicio de notificaciones
-```
+**🎉 ¡Sistema CDC funcionando completamente!**
 
 ---
 
