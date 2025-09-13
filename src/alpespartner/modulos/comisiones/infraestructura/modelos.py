@@ -1,5 +1,5 @@
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-from sqlalchemy import String, Numeric, DateTime, JSON, Boolean
+from sqlalchemy import String, Numeric, DateTime
 from datetime import datetime
 from typing import Optional
 
@@ -20,12 +20,4 @@ class Commission(Base):
     calculated_at:Mapped[datetime]=mapped_column(DateTime)
     approved_at:Mapped[Optional[datetime]]=mapped_column(DateTime,nullable=True)
 
-class OutboxEvent(Base):
-    __tablename__='outbox_event'
-    id:Mapped[str]=mapped_column(String(36),primary_key=True)
-    aggregate_type:Mapped[str]=mapped_column(String(64))
-    aggregate_id:Mapped[str]=mapped_column(String(36))
-    event_type:Mapped[str]=mapped_column(String(64))
-    payload:Mapped[dict]=mapped_column(JSON)
-    occurred_at:Mapped[datetime]=mapped_column(DateTime)
-    published:Mapped[bool]=mapped_column(Boolean,default=False)
+"""OutboxEvent removido: usar seedwork.infraestructura.outbox.modelos.OutboxEvent"""

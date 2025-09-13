@@ -14,7 +14,7 @@ from alpespartner.modulos.comisiones.dominio.repositorios.repositorios_eventos i
 from alpespartner.modulos.comisiones.dominio.eventos import EventoComision, ComisionCalculada, ComisionAprobada
 from alpespartner.modulos.comisiones.dominio.fabricas.fabricas import FabricaComisiones
 from .mapeadores.mapeadores import MapeadorEventosComision
-from .modelos import OutboxEvent
+from alpespartner.seedwork.infraestructura.outbox.modelos import OutboxEvent
 from alpespartner.config.db import db
 
 class RepositorioEventosComisionSQLAlchemy(RepositorioEventosComision):

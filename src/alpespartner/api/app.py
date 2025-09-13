@@ -11,6 +11,14 @@ from alpespartner.modulos.comisiones.aplicacion import handlers as _handlers  # 
 app=Flask(__name__)
 Base.metadata.create_all(bind=engine)
 
+# Registrar blueprint Campañas (DDD) si disponible
+try:
+    from alpespartner.modulos.campanas.infraestructura.api import bp_campanas
+    app.register_blueprint(bp_campanas)
+except Exception as e:  # noqa: BLE001
+    # Fallback silencioso para no romper si el módulo aún no está migrado en algunos entornos
+    print(f"[WARN] No se pudo registrar blueprint campanas: {e}")
+
 @app.post('/commissions/calculate')
 def calculate():
     dto=CrearComisionDTO(**request.get_json(force=True))

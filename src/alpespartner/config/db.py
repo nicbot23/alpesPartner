@@ -1,5 +1,6 @@
 from flask_sqlalchemy import SQLAlchemy
 from flask import Flask
+from sqlalchemy.orm import Session
 import os
 
 db = None
@@ -27,3 +28,10 @@ def database_connection(config, basedir=os.path.abspath(os.path.dirname(__file__
 def init_db(app: Flask):
     global db 
     db = SQLAlchemy(app)
+
+
+def get_db_session() -> Session:
+    """Obtiene una sesión de base de datos"""
+    if db is None:
+        raise RuntimeError("Database not initialized. Call init_db() first.")
+    return db.session

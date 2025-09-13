@@ -1,5 +1,6 @@
 version: "3.9"
 services:
+  # Base de datos principal (Campañas, Comisiones, shared outbox)
   mysql:
     image: mysql:8.0
     environment:
@@ -10,6 +11,30 @@ services:
     command: ["mysqld","--server-id=223344","--log-bin=mysql-bin","--binlog_format=ROW","--binlog_row_image=FULL","--gtid_mode=ON","--enforce_gtid_consistency=ON"]
     ports: ["3306:3306"]
     volumes: [ "./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro" ]
+  
+  # Base de datos descentralizada para Conversiones
+  mysql-conversiones:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: debezium
+      MYSQL_DATABASE: alpes_conversiones
+      MYSQL_USER: alpes
+      MYSQL_PASSWORD: alpes
+    command: ["mysqld","--server-id=223345","--log-bin=mysql-bin","--binlog_format=ROW","--binlog_row_image=FULL","--gtid_mode=ON","--enforce_gtid_consistency=ON"]
+    ports: ["3307:3306"]
+    volumes: [ "./db/conversiones_init.sql:/docker-entrypoint-initdb.d/conversiones_init.sql:ro" ]
+  
+  # Base de datos descentralizada para Afiliados
+  mysql-afiliados:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: debezium
+      MYSQL_DATABASE: alpes_afiliados
+      MYSQL_USER: alpes
+      MYSQL_PASSWORD: alpes
+    command: ["mysqld","--server-id=223346","--log-bin=mysql-bin","--binlog_format=ROW","--binlog_row_image=FULL","--gtid_mode=ON","--enforce_gtid_consistency=ON"]
+    ports: ["3308:3306"]
+    volumes: [ "./db/afiliados_init.sql:/docker-entrypoint-initdb.d/afiliados_init.sql:ro" ]
   pulsar:
     image: apachepulsar/pulsar:3.1.2
     command: bash -c "bin/pulsar standalone"

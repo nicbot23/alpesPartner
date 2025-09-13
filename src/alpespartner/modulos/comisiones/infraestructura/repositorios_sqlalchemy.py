@@ -4,7 +4,8 @@ from decimal import Decimal
 from alpespartner.modulos.comisiones.dominio.repositorios.repositorios import RepositorioComisiones
 from alpespartner.modulos.comisiones.dominio.agregados import Comision
 from alpespartner.modulos.comisiones.infraestructura.mapeadores.mapeadores import a_modelo, a_outbox
-from .modelos import Commission, OutboxEvent
+from .modelos import Commission
+from alpespartner.seedwork.infraestructura.outbox.modelos import OutboxEvent
 from alpespartner.config.db import db
 
 class RepoComisionesSQLAlchemy(RepositorioComisiones):
@@ -83,10 +84,13 @@ class RepoComisionesSQLAlchemy(RepositorioComisiones):
         self.session.add(out)
 
     def obtener_por_conversion(self, conversion_id:str)->dict|None:
+        """Obtiene datos básicos de una comisión por conversion_id"""
         cm=self.session.query(Commission).filter(Commission.conversion_id==conversion_id).one_or_none()
-        if not cm: return None
-
-    def obtener_por_conversion(self, conversion_id:str)->dict|None:
-        cm=self.s.query(Commission).filter(Commission.conversion_id==conversion_id).one_or_none()
-        if not cm: return None
-        return {'commissionId':cm.id,'status':cm.status,'netAmount':float(cm.net_amount),'currency':cm.net_currency}
+        if not cm:
+            return None
+        return {
+            'commissionId':cm.id,
+            'status':cm.status,
+            'netAmount':float(cm.net_amount),
+            'currency':cm.net_currency
+        }

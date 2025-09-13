@@ -2,7 +2,8 @@ import uuid
 from alpespartner.modulos.comisiones.dominio.agregados import Comision
 from alpespartner.modulos.comisiones.dominio.eventos import ComisionCalculada, ComisionAprobada
 from alpespartner.seedwork.infraestructura.utils import unix_time_millis
-from ..modelos import Commission, OutboxEvent
+from ..modelos import Commission
+from alpespartner.seedwork.infraestructura.outbox.modelos import OutboxEvent
 from alpespartner.seedwork.dominio.eventos import (EventoDominio)
 from alpespartner.modulos.comisiones.dominio.eventos import EventoComision, ComisionCalculada, ComisionAprobada
 from alpespartner.seedwork.dominio.repositorios.base import Mapeador
@@ -53,7 +54,9 @@ def a_outbox(evt, agregado:Comision)-> OutboxEvent| None:
             event_type='CommissionCalculated',
             payload=payload,
             occurred_at=agregado.calculated_at,
-            published=False
+            published=False,
+            correlation_id=evt.correlation_id or str(evt.id),
+            causation_id=evt.causation_id
         )
     
     if isinstance(evt, ComisionAprobada):
@@ -69,7 +72,9 @@ def a_outbox(evt, agregado:Comision)-> OutboxEvent| None:
             event_type='CommissionApproved',
             payload=payload,
             occurred_at=agregado.approved_at,
-            published=False
+            published=False,
+            correlation_id=evt.correlation_id or str(evt.id),
+            causation_id=evt.causation_id
         )
     return None
 
