@@ -1,0 +1,3 @@
+"""
+Inicialización módulo conversiones
+"""

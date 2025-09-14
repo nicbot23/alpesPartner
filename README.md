@@ -1,13 +1,211 @@
-# 🚀 AlpesPartner - Comisiones con CDC Pattern
+# 🚀 AlpesPartner Ecosystem
 
-Sistema de comisiones usando **Change Data Capture (CDC)** con patrón Outbox para garantizar consistencia transaccional entre base de datos y eventos.
+Sistema completo de gestión de afiliados, conversiones y comisiones con arquitectura de microservicios y comunicación asíncrona vía eventos Apache Pulsar.
 
-## 📋 Stack Tecnológico
+## 🏗️ Arquitectura
 
-- **API**: Flask (Python)
-- **Base de datos**: MySQL 8 con binlog
-- **Tabla Outbox**: Para eventos transaccionales
-- **Message Broker**: Apache Pulsar 3.1.2
+```
+┌─────────────────────────────────────────────────────────────┐
+│                  AlpesPartner Ecosystem                     │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  ┌─────────────┐  ┌─────────────┐  ┌──────────────────────┐ │
+│  │  Afiliados  │  │Conversiones │  │      Marketing       │ │
+│  │   :8001     │  │   :8002     │  │       :8003          │ │
+│  │             │  │             │  │ ┌──────────────────┐ │ │
+│  │ - Registro  │  │ - Tracking  │  │ │   Comisiones     │ │ │
+│  │ - Gestión   │  │ - Métricas  │  │ │   - Cálculo      │ │ │
+│  │ - Config    │  │ - Reporting │  │ │   - Aprobación   │ │ │
+│  └─────────────┘  └─────────────┘  │ │   - Pago         │ │ │
+│         │                 │        │ └──────────────────┘ │ │
+│         └─────────────────┼────────┼─────────────────────┘ │ │
+│                           │        │                       │
+│  ┌───────────────────────────────────────────────────────┐   │
+│  │               Apache Pulsar                           │   │
+│  │            Event Streaming                            │   │
+│  │  📢 afiliados.eventos  📢 conversiones.eventos       │   │
+│  │  📢 marketing.eventos  📢 comisiones.eventos         │   │
+│  └───────────────────────────────────────────────────────┘   │
+│                                                             │
+│  ┌─────────────┐ ┌─────────────┐ ┌─────────────────────────┐ │
+│  │MySQL        │ │MySQL        │ │MySQL                    │ │
+│  │Afiliados    │ │Conversiones │ │Marketing                │ │
+│  │:3306        │ │:3307        │ │:3308                    │ │
+│  └─────────────┘ └─────────────┘ └─────────────────────────┘ │
+└─────────────────────────────────────────────────────────────┘
+```
+
+## ✨ Características
+
+- **🎯 Microservicios**: Arquitectura distribuida con 3 servicios independientes
+- **📡 Event-Driven**: Comunicación asíncrona vía Apache Pulsar
+- **💰 Comisiones Enterprise**: Módulo completo con cálculo, aprobación y pago
+- **🗄️ Multi-Database**: Base de datos separada por bounded context
+- **📊 Monitoreo**: Dashboard en tiempo real de eventos y métricas
+- **🧪 Testing E2E**: Suite completa de pruebas end-to-end automatizadas
+- **🚀 Docker Ready**: Deployment completo con docker-compose
+
+## 🚀 Quick Start
+
+### 1. Ejecución Completa (Recomendado)
+
+```bash
+# Clonar repositorio
+git clone <repository-url>
+cd alpesPartner
+
+# Ejecutar ecosistema completo
+./scripts/run_full_ecosystem.sh
+```
+
+Este script realiza automáticamente:
+- ✅ Construcción y deployment de servicios
+- ✅ Configuración de tópicos Apache Pulsar
+- ✅ Poblado de datos de prueba
+- ✅ Ejecución de casos de prueba E2E
+- ✅ Validación de eventos y métricas
+- ✅ Generación de reportes
+
+### 2. Ejecución Manual
+
+```bash
+# 1. Levantar servicios
+docker-compose up --build -d
+
+# 2. Configurar Pulsar
+./scripts/setup_pulsar_topics.sh
+
+# 3. Poblar datos de prueba
+./scripts/init_test_data.sh
+
+# 4. Ejecutar pruebas E2E
+./scripts/run_e2e_tests.sh
+```
+
+## � URLs de Acceso
+
+### APIs REST (Documentación OpenAPI)
+- **Afiliados**: http://localhost:8001/docs
+- **Conversiones**: http://localhost:8002/docs  
+- **Marketing**: http://localhost:8003/docs
+
+### Herramientas de Administración
+- **Pulsar Manager**: http://localhost:9527
+- **phpMyAdmin**: http://localhost:8082
+- **Redis Commander**: http://localhost:8081
+
+### Health Checks
+- **Afiliados**: http://localhost:8001/health
+- **Conversiones**: http://localhost:8002/health
+- **Marketing**: http://localhost:8003/health
+
+## 📊 Monitoreo en Tiempo Real
+
+```bash
+# Dashboard interactivo de Pulsar
+./scripts/monitor_pulsar.sh dashboard
+
+# Logging continuo de eventos
+./scripts/monitor_pulsar.sh log
+
+# Ver logs de servicios
+docker-compose logs -f
+```
+
+## 🧪 Casos de Uso E2E
+
+### Flujo Completo de Comisión
+
+```bash
+# 1. Crear afiliado
+curl -X POST http://localhost:8001/api/v1/afiliados \
+  -H "Content-Type: application/json" \
+  -d '{
+    "nombre": "Juan Pérez",
+    "email": "juan@email.com",
+    "tipo_afiliado": "premium",
+    "configuracion_comisiones": {
+      "comision_base": 15.0,
+      "comision_premium": 20.0
+    }
+  }'
+
+# 2. Registrar conversión  
+curl -X POST http://localhost:8002/api/v1/conversiones \
+  -H "Content-Type: application/json" \
+  -d '{
+    "afiliado_id": "af_123",
+    "valor_conversion": 100000.0,
+    "tipo_conversion": "venta"
+  }'
+
+# 3. Crear y aprobar comisión (automático vía eventos)
+curl -X POST http://localhost:8003/api/v1/comisiones \
+  -H "Content-Type: application/json" \
+  -d '{
+    "afiliado_id": "af_123",
+    "conversion_id": "conv_456",
+    "tipo_comision": "porcentual",
+    "porcentaje": 15.0
+  }'
+```
+
+## 📚 Documentación Completa
+
+- **[Documentación del Ecosistema](ECOSYSTEM_DOCS.md)**: Guía completa con APIs, eventos, deployment y troubleshooting
+- **[Context Map](CONTEXT_MAP.md)**: Mapeo de bounded contexts y relaciones
+- **Scripts**: Ver carpeta `/scripts/` para herramientas de automatización
+
+## 🛠️ Scripts Disponibles
+
+| Script | Descripción |
+|--------|-------------|
+| `run_full_ecosystem.sh` | 🚀 Ejecución completa del ecosistema |
+| `setup_pulsar_topics.sh` | 📡 Configuración de tópicos Pulsar |
+| `init_test_data.sh` | 🗄️ Poblado de datos de prueba |
+| `run_e2e_tests.sh` | 🧪 Casos de prueba E2E |
+| `monitor_pulsar.sh` | 📊 Monitoreo en tiempo real |
+
+## 📈 Métricas y Reportes
+
+Después de la ejecución, revisa:
+- `test_data_ids.json`: IDs de entidades creadas
+- `e2e_test_report.json`: Reporte de pruebas E2E
+- `performance_report.json`: Métricas de rendimiento
+
+## 🛑 Detener el Ecosistema
+
+```bash
+# Parar servicios
+docker-compose down
+
+# Parar y limpiar volúmenes
+docker-compose down -v
+```
+
+## 🔧 Requisitos del Sistema
+
+- **Docker**: >= 20.10
+- **Docker Compose**: >= 2.0
+- **RAM**: 8GB recomendado
+- **CPU**: 4 cores recomendado
+- **Disco**: 10GB disponibles
+
+## 🤝 Contribución
+
+1. Fork el repositorio
+2. Crea tu rama de feature (`git checkout -b feature/AmazingFeature`)
+3. Commit tus cambios (`git commit -m 'Add some AmazingFeature'`)
+4. Push a la rama (`git push origin feature/AmazingFeature`)
+5. Abre un Pull Request
+
+## 📄 Licencia
+
+Este proyecto está bajo la Licencia MIT - ver el archivo [LICENSE](LICENSE) para detalles.
+
+---
+
+*🚀 AlpesPartner Ecosystem - Microservicios con Event-Driven Architecture*
 - **CDC**: Simulador manual (Debezium alternativo)
 
 ## 🏗️ Arqutectura
