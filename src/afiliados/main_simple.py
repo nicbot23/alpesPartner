@@ -2,6 +2,7 @@
 API Simple para Afiliados - Demostración
 """
 import uvicorn
+import asyncio
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import logging
@@ -27,6 +28,40 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.on_event("startup")
+async def startup_event():
+    """Inicializar consumidores de eventos al arrancar la aplicación"""
+    logger.info("🚀 Iniciando microservicio de Afiliados")
+    logger.info("🔄 Configurando consumidores de eventos...")
+    
+    # Importar y configurar consumidores
+    try:
+        from .consumidores import SUSCRIPCIONES, suscribirse_a_topico
+        
+        # Iniciar consumidores en background
+        for config in SUSCRIPCIONES:
+            asyncio.create_task(
+                suscribirse_a_topico(
+                    config['topico'],
+                    config['suscripcion'],
+                    config['schema'],
+                    config['manejador']
+                )
+            )
+            logger.info(f"✅ Consumidor iniciado: {config['topico']} -> {config['suscripcion']}")
+        
+        logger.info("🎯 Afiliados listo para escuchar eventos de campañas")
+        
+    except Exception as e:
+        logger.error(f"❌ Error iniciando consumidores: {e}")
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Cleanup al cerrar la aplicación"""
+    logger.info("🛑 Cerrando microservicio de Afiliados")
 
 @app.get("/")
 async def root():
