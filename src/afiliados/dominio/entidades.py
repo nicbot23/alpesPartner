@@ -8,7 +8,7 @@ from typing import List, Optional
 from enum import Enum
 import uuid
 
-from ..seedwork.dominio.entidades import AgregacionRaiz, EntidadRaiz
+from ..seedwork.dominio.entidades import AgregacionRaiz, Entidad
 from ..seedwork.dominio.eventos import EventoDominio
 
 class EstadoAfiliado(Enum):

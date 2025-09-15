@@ -14,7 +14,6 @@ cryptography>=41.0.0,<46.0.0
 
 # Messaging
 pulsar-client==3.3.0
-# aiopulsar==3.3.0  # Comentado hasta resolver dependencia
 
 # Utilidades
 python-multipart==0.0.6

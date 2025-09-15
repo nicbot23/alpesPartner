@@ -5,44 +5,49 @@ import logging
 import traceback
 import pulsar
 import _pulsar
-import aiopulsar
 import asyncio
+from dataclasses import dataclass
 from pulsar.schema import *
 from conversiones.config import settings
 
-async def suscribirse_a_topico(topico: str, suscripcion: str, schema: Record, tipo_consumidor:_pulsar.ConsumerType=_pulsar.ConsumerType.Shared):
-    """
-    Suscribirse a un tópico específico de forma asíncrona
-    """
-    try:
-        async with aiopulsar.connect(settings.PULSAR_URL) as cliente:
-            async with cliente.subscribe(
-                topico, 
-                consumer_type=tipo_consumidor,
-                subscription_name=suscripcion, 
-                schema=AvroSchema(schema)
-            ) as consumidor:
-                logging.info(f"🔗 Suscrito a tópico: {topico} con suscripción: {suscripcion}")
-                
-                while True:
-                    try:
-                        mensaje = await consumidor.receive()
-                        datos = mensaje.value()
-                        
-                        # Procesar el mensaje basado en el tipo de evento/comando
-                        await procesar_mensaje(datos, topico)
-                        
-                        await consumidor.acknowledge(mensaje)
-                        logging.info(f"✅ Mensaje procesado exitosamente de {topico}")
-                        
-                    except Exception as e:
-                        logging.error(f"❌ Error procesando mensaje de {topico}: {str(e)}")
-                        await consumidor.negative_acknowledge(mensaje)
+logger = logging.getLogger(__name__)
 
+# Definiciones locales de eventos para mantener independencia de microservicios
+@dataclass
+class AfiliadoRegistrado:
+    """Evento local para afiliado registrado (recibido de afiliados.eventos)"""
+    user_id: str
+    email: str
+    nombre: str
+    apellido: str
+    estado: str
+    fecha_registro: str
+
+async def suscribirse_a_topico(topico: str, suscripcion: str, schema, manejador):
+    """Crear suscripción async a un tópico de Pulsar"""
+    try:
+        client = pulsar.Client(f'pulsar://{settings.PULSAR_URL.replace("pulsar://", "")}')
+        consumer = client.subscribe(
+            topic=topico,
+            subscription_name=suscripcion,
+            schema=AvroSchema(schema)
+        )
+        
+        logger.info(f"Suscrito a tópico {topico} con suscripción {suscripcion}")
+        
+        while True:
+            try:
+                mensaje = consumer.receive(timeout_millis=1000)
+                await manejador(mensaje.value())
+                consumer.acknowledge(mensaje)
+                await asyncio.sleep(0.1)
+            except Exception as e:
+                if "Timeout" not in str(e):
+                    logger.error(f"Error procesando mensaje: {e}")
+                await asyncio.sleep(0.1)
+                
     except Exception as e:
-        logging.error(f'❌ ERROR: Suscribiéndose al tópico! {topico}, {suscripcion}, {schema}')
-        logging.error(f"Detalles del error: {str(e)}")
-        traceback.print_exc()
+        logger.error(f"Error en suscripción a {topico}: {e}")
 
 async def procesar_mensaje(datos, topico: str):
     """
@@ -61,6 +66,8 @@ async def procesar_mensaje(datos, topico: str):
             await procesar_comando_rechazar_conversion(datos)
         elif "comando-cancelar-conversion" in topico:
             await procesar_comando_cancelar_conversion(datos)
+        elif "afiliados.eventos" in topico:
+            await procesar_evento_afiliado_registrado(datos)
         else:
             logging.warning(f"⚠️ Tipo de tópico no reconocido: {topico}")
             
@@ -97,3 +104,52 @@ async def procesar_comando_cancelar_conversion(datos):
     """Procesar comando cancelar conversión"""
     logging.info(f"🚫 Procesando comando cancelar conversión: {datos}")
     # TODO: Implementar lógica para cancelar conversión
+
+async def procesar_evento_afiliado_registrado(datos):
+    """Procesar evento de afiliado registrado desde microservicio de afiliados"""
+    logging.info(f"🔥 Evento recibido: Afiliado registrado {datos}")
+    
+    try:
+        # Verificar que es un evento de afiliado registrado
+        if hasattr(datos, 'user_id') and hasattr(datos, 'estado'):
+            if datos.estado == "activo":
+                # Generar conversión automática para el afiliado
+                import random
+                from datetime import datetime
+                
+                conversion_data = {
+                    "user_id": datos.user_id,
+                    "afiliado_id": datos.user_id,
+                    "valor_conversion": round(random.uniform(100, 1000), 2),
+                    "tipo_conversion": "registro_automatico",
+                    "fecha_conversion": datetime.now().isoformat(),
+                    "automatica": True,
+                    "metadata": {
+                        "generado_por": "evento_afiliado",
+                        "email_afiliado": getattr(datos, 'email', ''),
+                        "nombre_afiliado": f"{getattr(datos, 'nombre', '')} {getattr(datos, 'apellido', '')}"
+                    }
+                }
+                
+                logging.info(f"🎯 Generando conversión automática para afiliado {datos.user_id}")
+                
+                # TODO: Publicar evento ConversionRegistrada usando el despachador
+                # await despachador.publicar_evento_conversion_registrada(conversion_data)
+                
+                logging.info(f"✅ Conversión automática generada para afiliado {datos.user_id}")
+        else:
+            logging.warning(f"⚠️ Evento de afiliado incompleto: {datos}")
+            
+    except Exception as e:
+        logging.error(f"❌ Error procesando evento de afiliado registrado: {e}")
+
+# Configuración de suscripciones
+SUSCRIPCIONES = [
+    {
+        'topico': 'afiliados.eventos',
+        'suscripcion': 'conversiones-afiliados-eventos',
+        'schema': AfiliadoRegistrado,
+        'manejador': procesar_evento_afiliado_registrado
+    },
+    # Agregar más suscripciones según necesidad
+]

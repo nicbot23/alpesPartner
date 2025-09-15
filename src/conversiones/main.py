@@ -7,18 +7,12 @@ from fastapi import FastAPI
 from contextlib import asynccontextmanager
 from conversiones.config.api import settings
 from conversiones.api.v1.conversiones.router import router as conversiones_router
-from conversiones.modulos.conversiones.infraestructura.despachadores import DespachadorEventosPulsar
-from consumidores import ConversionsEventConsumer
-from despachadores import EventDispatcher
+from conversiones.consumidores import SUSCRIPCIONES, suscribirse_a_topico
+from conversiones.despachadores import despachador
 
 # Configurar logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-# Instancias globales
-despachador_eventos = DespachadorEventosPulsar()
-event_dispatcher = EventDispatcher()
-event_consumer = ConversionsEventConsumer()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -26,32 +20,36 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("Iniciando microservicio de Conversiones")
     
-    try:
-        # Inicializar despachador de eventos
-        await despachador_eventos.start()
-        
-        # Inicializar consumer de eventos
-        await event_consumer.start()
-        
-        # Inicializar dispatcher de eventos
-        await event_dispatcher.start()
-        
-        logger.info("Microservicio de Conversiones iniciado correctamente")
-        
-    except Exception as e:
-        logger.error(f"Error al iniciar microservicio: {e}")
+    # Inicializar despachador
+    await despachador.inicializar()
+    
+    # Iniciar consumidores async
+    tareas_consumidores = []
+    for suscripcion in SUSCRIPCIONES:
+        tarea = asyncio.create_task(
+            suscribirse_a_topico(
+                suscripcion['topico'],
+                suscripcion['suscripcion'], 
+                suscripcion['schema'],
+                suscripcion['manejador']
+            )
+        )
+        tareas_consumidores.append(tarea)
+        logger.info(f"Iniciado consumidor para {suscripcion['topico']}")
+    
+    logger.info("Microservicio de Conversiones iniciado correctamente")
     
     yield
     
     # Shutdown
     logger.info("Deteniendo microservicio de Conversiones")
     
-    try:
-        await despachador_eventos.stop()
-        await event_consumer.stop()
-        await event_dispatcher.stop()
-    except Exception as e:
-        logger.error(f"Error al detener microservicio: {e}")
+    # Cancelar tareas de consumidores
+    for tarea in tareas_consumidores:
+        tarea.cancel()
+    
+    # Cerrar despachador
+    await despachador.cerrar()
     
     logger.info("Microservicio de Conversiones detenido")
 

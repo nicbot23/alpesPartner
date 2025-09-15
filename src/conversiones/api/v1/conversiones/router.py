@@ -18,8 +18,11 @@ from .dto import (
     ConversionActualizar,
     ConversionResponse,
     ConversionListResponse,
+    DetectarConversionRequest,
     ValidarConversionRequest,
+    ConfirmarConversionRequest,
     RechazarConversionRequest,
+    CancelarConversionRequest,
     MessageResponse
 )
 from ....utils import generar_uuid, time_millis

@@ -13,83 +13,11 @@ from typing import List, Optional, Dict, Set, Union, Any
 from abc import ABC, abstractmethod
 import uuid
 
-# Clases base locales para evitar problemas de importación
-@dataclass
-class EventoDominio(ABC):
-    """Evento de dominio base"""
-    id: str = field(default_factory=lambda: str(uuid.uuid4()))
-    fecha: datetime = field(default_factory=datetime.now)
+# Imports from seedwork
+from marketing.seedwork.dominio.eventos import EventoDominio
+from marketing.seedwork.dominio.entidades import Entidad, RaizAgregado
+from marketing.seedwork.dominio.excepciones import ExcepcionDominio
 
-class ExcepcionDominio(Exception):
-    """Excepción de dominio base"""
-    pass
-
-@dataclass  
-class Entidad(ABC):
-    """Entidad base"""
-    id: str = field(default_factory=lambda: str(uuid.uuid4()))
-    fecha_creacion: datetime = field(default_factory=datetime.now)
-    fecha_actualizacion: datetime = field(default_factory=datetime.now)
-    version: int = 1
-
-@dataclass
-class RaizAgregado(Entidad):
-    """Raíz de agregado"""
-    _eventos: List[EventoDominio] = field(default_factory=list, init=False)
-    
-    def agregar_evento(self, evento: EventoDominio):
-        self._eventos.append(evento)
-    
-    def obtener_eventos(self) -> List[EventoDominio]:
-        return self._eventos.copy()
-    
-    def limpiar_eventos(self):
-        self._eventos.clear()
-
-# Enums del dominio
-class EstadoComision(Enum):
-    from typing import List, Optional, Dict, Set, Union, Any
-    from abc import ABC, abstractmethod
-    import uuid
-
-# Clases base locales para evitar problemas de importación
-@dataclass
-class EventoDominio(ABC):
-    """Evento de dominio base"""
-    id: str = field(default_factory=lambda: str(uuid.uuid4()))
-    fecha: datetime = field(default_factory=datetime.now)
-
-class ExcepcionDominio(Exception):
-    """Excepción de dominio base"""
-    pass
-
-@dataclass  
-class Entidad(ABC):
-    """Entidad base"""
-    id: str = field(default_factory=lambda: str(uuid.uuid4()))
-    fecha_creacion: datetime = field(default_factory=datetime.now)
-    fecha_actualizacion: datetime = field(default_factory=datetime.now)
-    version: int = 1
-
-@dataclass
-class RaizAgregado(Entidad):
-    """Raíz de agregado"""
-    _eventos: List[EventoDominio] = field(default_factory=list, init=False)
-    
-    def agregar_evento(self, evento: EventoDominio):
-        self._eventos.append(evento)
-    
-    def obtener_eventos(self) -> List[EventoDominio]:
-        return self._eventos.copy()
-    
-    def limpiar_eventos(self):
-        self._eventos.clear()
-from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
-from datetime import datetime, timedelta
-from decimal import Decimal, ROUND_HALF_UP
-from enum import Enum
-from typing import Dict, List, Optional, Any
 # Enums del dominio
 class EstadoComision(Enum):
     PENDIENTE = "pendiente"
@@ -299,14 +227,14 @@ class DatosAfiliado:
         return multiplicadores.get(self.nivel, Decimal("1.0")) * self.multiplicador_nivel
 
 # Eventos del dominio
-@dataclass(frozen=True)
+@dataclass
 class ComisionCalculada(EventoDominio):
-    comision_id: str
-    campana_id: str
-    afiliado_id: str
-    conversion_id: str
-    monto_comision: MontoMonetario
-    porcentaje_aplicado: PorcentajeComision
+    comision_id: str = ""
+    campana_id: str = ""
+    afiliado_id: str = ""
+    conversion_id: str = ""
+    monto_comision: Optional[MontoMonetario] = None
+    porcentaje_aplicado: Optional[PorcentajeComision] = None
     fecha_calculo: datetime = field(default_factory=datetime.now)
     
     def to_dict(self) -> Dict[str, Any]:
@@ -315,32 +243,32 @@ class ComisionCalculada(EventoDominio):
             "campana_id": self.campana_id,
             "afiliado_id": self.afiliado_id,
             "conversion_id": self.conversion_id,
-            "monto_comision": self.monto_comision.to_dict(),
-            "porcentaje_aplicado": self.porcentaje_aplicado.to_float(),
+            "monto_comision": self.monto_comision.to_dict() if self.monto_comision else {},
+            "porcentaje_aplicado": self.porcentaje_aplicado.to_float() if self.porcentaje_aplicado else 0.0,
             "fecha_calculo": self.fecha_calculo.isoformat()
         }
 
-@dataclass(frozen=True)
+@dataclass
 class ComisionAprobada(EventoDominio):
-    comision_id: str
-    aprobada_por: str
-    monto_final: MontoMonetario
+    comision_id: str = ""
+    aprobada_por: str = ""
+    monto_final: Optional[MontoMonetario] = None
     fecha_aprobacion: datetime = field(default_factory=datetime.now)
     comentarios: Optional[str] = None
 
-@dataclass(frozen=True)
+@dataclass
 class ComisionRechazada(EventoDominio):
-    comision_id: str
-    rechazada_por: str
-    motivo: str
+    comision_id: str = ""
+    rechazada_por: str = ""
+    motivo: str = ""
     fecha_rechazo: datetime = field(default_factory=datetime.now)
 
-@dataclass(frozen=True)
+@dataclass
 class ComisionPagada(EventoDominio):
-    comision_id: str
-    afiliado_id: str
-    monto_pagado: MontoMonetario
-    referencia_pago: str
+    comision_id: str = ""
+    afiliado_id: str = ""
+    monto_pagado: Optional[MontoMonetario] = None
+    referencia_pago: str = ""
     fecha_pago: datetime = field(default_factory=datetime.now)
 
 # Servicios del dominio
@@ -446,14 +374,14 @@ class Comision(RaizAgregado):
     """Agregado raíz para comisiones"""
     
     # Datos de identificación
-    campana_id: str
-    afiliado_id: str
-    conversion_id: str
+    campana_id: str = ""
+    afiliado_id: str = ""
+    conversion_id: str = ""
     
     # Configuración y datos de cálculo
-    configuracion: ConfiguracionComision
-    datos_conversion: DatosConversion
-    datos_afiliado: DatosAfiliado
+    configuracion: Optional[ConfiguracionComision] = None
+    datos_conversion: Optional[DatosConversion] = None
+    datos_afiliado: Optional[DatosAfiliado] = None
     
     # Estado y cálculo
     estado: EstadoComision = EstadoComision.PENDIENTE
@@ -476,6 +404,15 @@ class Comision(RaizAgregado):
     # Observaciones y metadatos
     observaciones: Optional[str] = None
     metadatos: Dict[str, Any] = field(default_factory=dict)
+    
+    def validar(self):
+        """Validar invariantes de la comisión"""
+        if not self.campana_id:
+            raise ExcepcionDominio("Comisión debe tener un ID de campaña")
+        if not self.afiliado_id:
+            raise ExcepcionDominio("Comisión debe tener un ID de afiliado")
+        if not self.conversion_id:
+            raise ExcepcionDominio("Comisión debe tener un ID de conversión")
     
     def calcular(self, calculada_por: str) -> None:
         """Calcula la comisión"""

@@ -6,11 +6,11 @@ from abc import ABC, abstractmethod
 from typing import List, Optional, Dict, Any, TypeVar, Generic
 from datetime import datetime
 
-from ..dominio.entidades import EntidadRaiz, AgregacionRaiz, UnidadDeTrabajo
+from ..dominio.entidades import Entidad, AgregacionRaiz, UnidadDeTrabajo
 from ..aplicacion.comandos import Comando, ResultadoComando
 from ..aplicacion.consultas import Consulta, ResultadoPaginado
 
-T = TypeVar('T', bound=EntidadRaiz)
+T = TypeVar('T', bound=Entidad)
 TAgregado = TypeVar('TAgregado', bound=AgregacionRaiz)
 TComando = TypeVar('TComando', bound=Comando)
 TConsulta = TypeVar('TConsulta', bound=Consulta)

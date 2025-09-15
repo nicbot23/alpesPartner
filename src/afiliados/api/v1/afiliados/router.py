@@ -13,11 +13,11 @@ from .dto import (
     DesactivarAfiliadoRequest,
     MessageResponse
 )
-from modulos.afiliados.aplicacion.comandos import (
+from afiliados.modulos.afiliados.aplicacion.comandos import (
     RegistrarAfiliado, AprobarAfiliado, RechazarAfiliado, 
     ActualizarAfiliado, DesactivarAfiliado
 )
-from modulos.afiliados.aplicacion.manejadores import (
+from afiliados.modulos.afiliados.aplicacion.manejadores import (
     ManejadorRegistrarAfiliado, ManejadorAprobarAfiliado, ManejadorRechazarAfiliado,
     ManejadorActualizarAfiliado, ManejadorDesactivarAfiliado
 )

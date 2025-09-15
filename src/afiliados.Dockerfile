@@ -16,7 +16,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Copiar requirements e instalar dependencias Python
-COPY afiliados-requirements.txt .
+COPY src/afiliados-requirements.txt .
 RUN pip install --no-cache-dir -r afiliados-requirements.txt
 
 # Crear estructura de directorios
@@ -33,4 +33,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
 # Comando para ejecutar la aplicación
-CMD ["python", "-m", "uvicorn", "afiliados.main_simple:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["python", "-m", "uvicorn", "afiliados.main:app", "--host", "0.0.0.0", "--port", "8000"]

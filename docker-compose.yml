@@ -15,7 +15,7 @@ volumes:
 
 services:
   # =============================================================================
-  # INFRAESTRUCTURA DE DATOS
+  # INFRAESTRUCTURA DE DATOS - MYSQL PARA CADA MICROSERVICIO
   # =============================================================================
   
   # Base de datos principal - Marketing (Campañas, Comisiones)
@@ -155,7 +155,7 @@ services:
   afiliados:
     build:
       context: .
-      dockerfile: afiliados.Dockerfile
+      dockerfile: src/afiliados.Dockerfile
     container_name: alpes-afiliados
     environment:
       # Base de datos
@@ -207,7 +207,7 @@ services:
   conversiones:
     build:
       context: .
-      dockerfile: conversiones.Dockerfile
+      dockerfile: src/conversiones.Dockerfile
     container_name: alpes-conversiones
     environment:
       # Base de datos
@@ -260,7 +260,7 @@ services:
   marketing:
     build:
       context: .
-      dockerfile: marketing.Dockerfile
+      dockerfile: src/marketing.Dockerfile
     container_name: alpes-marketing
     environment:
       # Base de datos

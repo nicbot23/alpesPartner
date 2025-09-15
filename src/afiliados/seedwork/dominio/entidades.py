@@ -63,7 +63,7 @@ class AgregacionRaiz(Entidad):
 
 # Interfaces para repositorios siguiendo principios SOLID
 
-class RepositorioLectura(ABC, Protocol):
+class RepositorioLectura(Protocol):
     """
     Interface para operaciones de lectura
     Principio de Segregación de Interfaces - solo lectura
@@ -74,7 +74,7 @@ class RepositorioLectura(ABC, Protocol):
         """Obtiene una entidad por su ID"""
         pass
 
-class RepositorioEscritura(ABC, Protocol):
+class RepositorioEscritura(Protocol):
     """
     Interface para operaciones de escritura
     Principio de Segregación de Interfaces - solo escritura

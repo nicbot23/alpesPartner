@@ -2,7 +2,7 @@
 Eventos de dominio del módulo de afiliados
 """
 from dataclasses import dataclass
-from seedwork.dominio.eventos import EventoDominio
+from afiliados.seedwork.dominio.eventos import EventoDominio
 from datetime import datetime
 from typing import Optional
 

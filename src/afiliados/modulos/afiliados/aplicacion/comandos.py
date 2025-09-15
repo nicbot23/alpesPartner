@@ -2,7 +2,7 @@
 Comandos del módulo de afiliados
 """
 from dataclasses import dataclass
-from seedwork.aplicacion.comandos import Comando
+from afiliados.seedwork.aplicacion.comandos import Comando
 from typing import Optional
 
 @dataclass(frozen=True)

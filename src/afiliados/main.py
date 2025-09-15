@@ -7,18 +7,12 @@ from fastapi import FastAPI
 from contextlib import asynccontextmanager
 from afiliados.config.api import config
 from afiliados.api.v1.afiliados.router import router as afiliados_router
-from afiliados.modulos.afiliados.infraestructura.despachadores import DespachadorEventosPulsar
-from consumidores import AffiliatesEventConsumer
-from despachadores import EventDispatcher
+from consumidores import SUSCRIPCIONES, suscribirse_a_topico
+from despachadores import despachador
 
 # Configurar logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-# Instancias globales
-despachador_eventos = DespachadorEventosPulsar()
-event_dispatcher = EventDispatcher()
-event_consumer = AffiliatesEventConsumer()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -26,32 +20,36 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("Iniciando microservicio de Afiliados")
     
-    try:
-        # Inicializar despachador de eventos
-        await despachador_eventos.start()
-        
-        # Inicializar consumer de eventos
-        await event_consumer.start()
-        
-        # Inicializar dispatcher de eventos
-        await event_dispatcher.start()
-        
-        logger.info("Microservicio de Afiliados iniciado correctamente")
-        
-    except Exception as e:
-        logger.error(f"Error al iniciar microservicio: {e}")
+    # Inicializar despachador
+    await despachador.inicializar()
+    
+    # Iniciar consumidores async
+    tareas_consumidores = []
+    for suscripcion in SUSCRIPCIONES:
+        tarea = asyncio.create_task(
+            suscribirse_a_topico(
+                suscripcion['topico'],
+                suscripcion['suscripcion'], 
+                suscripcion['schema'],
+                suscripcion['manejador']
+            )
+        )
+        tareas_consumidores.append(tarea)
+        logger.info(f"Iniciado consumidor para {suscripcion['topico']}")
+    
+    logger.info("Microservicio de Afiliados iniciado correctamente")
     
     yield
     
     # Shutdown
     logger.info("Deteniendo microservicio de Afiliados")
     
-    try:
-        await despachador_eventos.stop()
-        await event_consumer.stop()
-        await event_dispatcher.stop()
-    except Exception as e:
-        logger.error(f"Error al detener microservicio: {e}")
+    # Cancelar tareas de consumidores
+    for tarea in tareas_consumidores:
+        tarea.cancel()
+    
+    # Cerrar despachador
+    await despachador.cerrar()
     
     logger.info("Microservicio de Afiliados detenido")
 

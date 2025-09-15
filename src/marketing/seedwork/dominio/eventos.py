@@ -2,7 +2,8 @@
 Eventos de dominio base para el microservicio Marketing
 Implementa principios SOLID y patrones de eventos
 """
-from abc import ABC, abstractmethod, Protocol
+from abc import ABC, abstractmethod
+from typing import Protocol
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import List, Optional, Dict, Any, TypeVar

@@ -2,7 +2,7 @@
 Entidades del dominio de afiliados
 """
 from dataclasses import dataclass, field
-from seedwork.dominio.entidades import AgregacionRaiz
+from afiliados.seedwork.dominio.entidades import AgregacionRaiz
 from .eventos import AfiliadoRegistrado, AfiliadoAprobado, AfiliadoRechazado, AfiliadoActualizado, AfiliadoDesactivado
 from datetime import datetime
 from typing import Optional

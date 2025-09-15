@@ -5,18 +5,17 @@ Arquitectura enterprise con principios SOLID, CQRS, DDD y Event-Driven
 
 # Aplicación - CQRS/CQS
 from .aplicacion.comandos import (
-    Comando, ComandoConRespuesta, ManejadorComando, BusComandos,
-    ValidadorComando, InterceptorComando, BusComandosImplementacion
+    Comando, ManejadorComando, BusComandos,
+    ValidadorComando, InterceptorComando, BusComandosImplemetacion
 )
 
 from .aplicacion.consultas import (
-    Consulta, ConsultaConPaginacion, ManejadorConsulta, BusConsultas,
+    Consulta, ManejadorConsulta, BusConsultas,
     ResultadoPaginado, CacheConsultas, BusConsultasImplementacion
 )
 
 from .aplicacion.outbox import (
-    EventoOutboxMarketing, PrioridadEvento, EstadoEvento,
-    RepositorioOutboxMarketing, ServicioOutboxMarketing
+    EventoOutboxMarketing, RepositorioOutboxMarketing, ServicioOutboxMarketing
 )
 
 from .aplicacion.eventos_integracion import (

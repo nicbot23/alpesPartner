@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from dataclasses import dataclass, field
 from pulsar.schema import AvroSchema
 import pulsar
 from .config.api import config
@@ -148,20 +149,24 @@ async def solicitar_notificacion_comision(user_id: str, monto_comision: float, c
 # Escuchar eventos de otros microservicios
 async def consumir_evento_conversion_detectada(evento):
     """Procesar evento de conversión detectada desde microservicio de conversiones"""
-    logger.info(f"Conversión detectada: {evento.user_id}, valor: {evento.valor}")
+    logger.info(f"🔥 Conversión detectada: {evento.user_id}, valor: {evento.conversion_value}")
     
-    # Buscar campañas activas que apliquen para este usuario
-    # Por ahora asignamos a una campaña por defecto
-    comando = ComandoAsignarConversionACampana(
-        id=generar_uuid(),
-        campana_id="campana-default",  # En producción buscar campaña apropiada
-        conversion_id=evento.id,
-        user_id=evento.user_id,
-        valor_conversion=evento.valor,
-        timestamp=time_millis()
-    )
-    
-    await consumir_comando_asignar_conversion(comando)
+    try:
+        # Asignar conversión a campaña apropiada
+        comando = ComandoAsignarConversionACampana(
+            id=generar_uuid(),
+            campana_id=getattr(evento, 'campaign_id', 'campana-default'),
+            conversion_id=evento.conversion_id,
+            user_id=evento.user_id,
+            valor_conversion=evento.conversion_value,
+            timestamp=time_millis()
+        )
+        
+        await consumir_comando_asignar_conversion(comando)
+        logger.info(f"✅ Conversión {evento.conversion_id} procesada automáticamente")
+        
+    except Exception as e:
+        logger.error(f"❌ Error procesando conversión detectada: {e}")
 
 
 async def consumir_evento_afiliado_registrado(evento):
@@ -182,6 +187,27 @@ async def consumir_evento_afiliado_registrado(evento):
     await despachador.publicar_evento_notificacion_solicitada(notificacion)
 
 
+# Importar eventos de otros microservicios - definir aquí mismo para evitar imports complejos
+@dataclass
+class ConversionDetected:
+    """Evento de conversión detectada desde conversiones microservice"""
+    conversion_id: str = ""
+    afiliado_id: str = ""
+    campana_id: str = ""
+    monto: float = 0.0
+    fecha_conversion: str = ""
+    metadatos: dict = field(default_factory=dict)
+
+@dataclass  
+class AfiliadoRegistrado:
+    """Evento de afiliado registrado desde afiliados microservice"""
+    afiliado_id: str = ""
+    nombre: str = ""
+    email: str = ""
+    fecha_registro: str = ""
+    nivel: str = "BRONCE"
+    metadatos: dict = field(default_factory=dict)
+
 # Configuración de suscripciones
 SUSCRIPCIONES = [
     {
@@ -197,15 +223,15 @@ SUSCRIPCIONES = [
         'manejador': consumir_comando_activar_campana
     },
     {
-        'topico': 'eventos-conversion-detectada',
-        'suscripcion': 'marketing-conversion-detectada-sub',
-        'schema': 'ConversionDetectada',  # Schema del microservicio de conversiones
+        'topico': 'persistent://public/default/conversiones.eventos',
+        'suscripcion': 'marketing-conversiones-eventos-sub',
+        'schema': ConversionDetected,
         'manejador': consumir_evento_conversion_detectada
     },
     {
-        'topico': 'eventos-afiliado-registrado',
-        'suscripcion': 'marketing-afiliado-registrado-sub',
-        'schema': 'AfiliadoRegistrado',  # Schema del microservicio de afiliados
+        'topico': 'persistent://public/default/afiliados.eventos',
+        'suscripcion': 'marketing-afiliados-eventos-sub',
+        'schema': AfiliadoRegistrado,
         'manejador': consumir_evento_afiliado_registrado
     }
 ]

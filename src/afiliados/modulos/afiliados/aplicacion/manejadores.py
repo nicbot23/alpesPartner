@@ -2,7 +2,7 @@
 Manejadores de comandos del módulo de afiliados
 """
 import logging
-from seedwork.aplicacion.comandos import ManejadorComando
+from afiliados.seedwork.aplicacion.comandos import ManejadorComando
 from .comandos import RegistrarAfiliado, AprobarAfiliado, RechazarAfiliado, ActualizarAfiliado, DesactivarAfiliado
 from ..dominio.entidades import Afiliado
 from ..infraestructura.despachadores import DespachadorEventosPulsar

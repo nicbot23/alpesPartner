@@ -14,7 +14,7 @@ import uuid
 
 from ..dominio.entidades import (
     Comision, EstadoComision, TipoComision, MontoMonetario, 
-    PorcentajeComision, ConfiguracionComision, CriterioCalculoComision,
+    PorcentajeComision, ConfiguracionComision, MetodoCalculo,
     ExcepcionDominio, EventoDominio
 )
 
