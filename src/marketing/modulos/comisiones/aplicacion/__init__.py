@@ -7,5 +7,5 @@ Arquitectura: Application Layer + CQRS + Use Cases
 # Re-export para facilitar importaciones
 from .comandos import *
 from .consultas import *
-from .handlers import *
+# from .handlers import *  # Comentado: archivo no existe
 from .servicios import *

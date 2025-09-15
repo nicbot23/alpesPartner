@@ -75,8 +75,8 @@ class CrearComisionRequest(BaseModel):
                 "tipo_comision": "porcentual",
                 "porcentaje": 15.5,
                 "configuracion": {
-                    "aplicar_descuentos": true,
-                    "incluir_iva": false
+                    "aplicar_descuentos": True,
+                    "incluir_iva": False
                 },
                 "metadatos": {
                     "canal_origen": "web",

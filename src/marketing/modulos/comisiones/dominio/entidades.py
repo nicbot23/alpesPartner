@@ -299,14 +299,14 @@ class DatosAfiliado:
         return multiplicadores.get(self.nivel, Decimal("1.0")) * self.multiplicador_nivel
 
 # Eventos del dominio
-@dataclass(frozen=True)
+@dataclass
 class ComisionCalculada(EventoDominio):
-    comision_id: str
-    campana_id: str
-    afiliado_id: str
-    conversion_id: str
-    monto_comision: MontoMonetario
-    porcentaje_aplicado: PorcentajeComision
+    comision_id: str = ""
+    campana_id: str = ""
+    afiliado_id: str = ""
+    conversion_id: str = ""
+    monto_comision: Optional[MontoMonetario] = None
+    porcentaje_aplicado: Optional[PorcentajeComision] = None
     fecha_calculo: datetime = field(default_factory=datetime.now)
     
     def to_dict(self) -> Dict[str, Any]:
@@ -315,32 +315,32 @@ class ComisionCalculada(EventoDominio):
             "campana_id": self.campana_id,
             "afiliado_id": self.afiliado_id,
             "conversion_id": self.conversion_id,
-            "monto_comision": self.monto_comision.to_dict(),
-            "porcentaje_aplicado": self.porcentaje_aplicado.to_float(),
+            "monto_comision": self.monto_comision.to_dict() if self.monto_comision else None,
+            "porcentaje_aplicado": self.porcentaje_aplicado.to_float() if self.porcentaje_aplicado else 0.0,
             "fecha_calculo": self.fecha_calculo.isoformat()
         }
 
-@dataclass(frozen=True)
+@dataclass
 class ComisionAprobada(EventoDominio):
-    comision_id: str
-    aprobada_por: str
-    monto_final: MontoMonetario
+    comision_id: str = ""
+    aprobada_por: str = ""
+    monto_final: Optional[MontoMonetario] = None
     fecha_aprobacion: datetime = field(default_factory=datetime.now)
     comentarios: Optional[str] = None
 
-@dataclass(frozen=True)
+@dataclass
 class ComisionRechazada(EventoDominio):
-    comision_id: str
-    rechazada_por: str
-    motivo: str
+    comision_id: str = ""
+    rechazada_por: str = ""
+    motivo: str = ""
     fecha_rechazo: datetime = field(default_factory=datetime.now)
 
-@dataclass(frozen=True)
+@dataclass
 class ComisionPagada(EventoDominio):
-    comision_id: str
-    afiliado_id: str
-    monto_pagado: MontoMonetario
-    referencia_pago: str
+    comision_id: str = ""
+    afiliado_id: str = ""
+    monto_pagado: Optional[MontoMonetario] = None
+    referencia_pago: str = ""
     fecha_pago: datetime = field(default_factory=datetime.now)
 
 # Servicios del dominio
@@ -446,14 +446,14 @@ class Comision(RaizAgregado):
     """Agregado raíz para comisiones"""
     
     # Datos de identificación
-    campana_id: str
-    afiliado_id: str
-    conversion_id: str
+    campana_id: str = ""
+    afiliado_id: str = ""
+    conversion_id: str = ""
     
     # Configuración y datos de cálculo
-    configuracion: ConfiguracionComision
-    datos_conversion: DatosConversion
-    datos_afiliado: DatosAfiliado
+    configuracion: Optional[ConfiguracionComision] = None
+    datos_conversion: Optional[DatosConversion] = None
+    datos_afiliado: Optional[DatosAfiliado] = None
     
     # Estado y cálculo
     estado: EstadoComision = EstadoComision.PENDIENTE

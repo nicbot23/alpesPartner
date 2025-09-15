@@ -6,10 +6,24 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import List, Optional, Dict, Any
+from enum import Enum
 import uuid
 import json
 
 from ..dominio.eventos import EventoDominio, EventoIntegracion, DespachadorEventos
+
+class PrioridadEvento(Enum):
+    """Enum para prioridades de eventos en outbox"""
+    ALTA = 1
+    MEDIA = 2
+    BAJA = 3
+
+class EstadoEvento(Enum):
+    """Enum para estados de eventos en outbox"""
+    PENDIENTE = "pendiente"
+    PUBLICADO = "publicado"
+    ERROR = "error"
+    REINTENTANDO = "reintentando"
 
 @dataclass
 class EventoOutboxMarketing:

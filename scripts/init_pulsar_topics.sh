@@ -28,6 +28,7 @@ bin/pulsar-admin topics create persistent://public/default/conversiones.eventos 
 bin/pulsar-admin topics create persistent://public/default/afiliados.eventos || echo "Tópico afiliados.eventos ya existe"
 bin/pulsar-admin topics create persistent://public/default/comisiones.eventos || echo "Tópico comisiones.eventos ya existe"
 bin/pulsar-admin topics create persistent://public/default/sistema.eventos || echo "Tópico sistema.eventos ya existe"
+bin/pulsar-admin topics create persistent://public/default/marketing.campanas.comandos || echo "Tópico marketing.campanas.comandos ya existe"
 
 echo "🎯 Listando tópicos creados:"
 bin/pulsar-admin topics list public/default
