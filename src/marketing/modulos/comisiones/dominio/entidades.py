@@ -48,9 +48,9 @@ class RaizAgregado(Entidad):
 
 # Enums del dominio
 class EstadoComision(Enum):
-from typing import List, Optional, Dict, Set, Union, Any
-from abc import ABC, abstractmethod
-import uuid
+    from typing import List, Optional, Dict, Set, Union, Any
+    from abc import ABC, abstractmethod
+    import uuid
 
 # Clases base locales para evitar problemas de importación
 @dataclass

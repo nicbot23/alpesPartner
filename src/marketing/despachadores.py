@@ -77,8 +77,9 @@ class Despachador:
         try:
             # Simular procesamiento del comando y generar eventos correspondientes
             from .eventos import CampanaCreada, ComisionCalculada, NotificacionSolicitada
+            import random
             
-            # Crear eventos basados en el comando
+            # 1️⃣ Crear evento de campaña creada
             evento_campana_creada = CampanaCreada(
                 id=comando.id,
                 campana_id=comando.id,
@@ -94,41 +95,59 @@ class Despachador:
                 timestamp=comando.timestamp
             )
             
-            # Publicar evento de campaña creada
+            # Publicar evento principal
             await self.publicar_evento_campana_creada(evento_campana_creada)
+            logger.info(f"📢 Evento CampanaCreada publicado: {comando.nombre}")
             
-            # Simular configuración de comisiones
-            evento_comision = ComisionCalculada(
-                id=f"comision-{comando.id}",
-                campana_id=comando.id,
-                afiliado_id="afiliado-default",
-                user_id="system",
-                conversion_id="config-inicial",
-                monto_comision=0.0,
-                porcentaje_comision=5.0,
-                fecha_calculo=datetime.now().isoformat(),
-                timestamp=comando.timestamp
-            )
+            # 2️⃣ Simular múltiples comisiones para diferentes afiliados
+            num_afiliados = random.randint(3, 8)
+            for i in range(num_afiliados):
+                evento_comision = ComisionCalculada(
+                    id=f"comision-{comando.id}-af{i+1}",
+                    campana_id=comando.id,
+                    afiliado_id=f"afiliado-{comando.tipo_campana}-{i+1}",
+                    user_id=f"user-{i+1}",
+                    conversion_id=f"config-{comando.tipo_campana}-{i+1}",
+                    monto_comision=round(random.uniform(50.0, 500.0), 2),
+                    porcentaje_comision=round(random.uniform(3.0, 12.0), 1),
+                    fecha_calculo=datetime.now().isoformat(),
+                    timestamp=comando.timestamp + i
+                )
+                
+                await self.publicar_evento_comision_calculada(evento_comision)
             
-            await self.publicar_evento_comision_calculada(evento_comision)
+            logger.info(f"💰 {num_afiliados} eventos ComisionCalculada publicados")
             
-            # Evento de notificación
-            evento_notificacion = NotificacionSolicitada(
-                id=f"notif-{comando.id}",
-                destinatario="marketing-team@alpes.com",
-                tipo_notificacion="email",
-                plantilla="nueva-campana",
-                datos=f'{{"campana": "{comando.nombre}", "presupuesto": {comando.presupuesto}}}',
-                prioridad="alta",
-                timestamp=comando.timestamp
-            )
+            # 3️⃣ Múltiples notificaciones para diferentes destinatarios
+            destinatarios = [
+                ("marketing-team@alpes.com", "email", "nueva-campana"),
+                ("afiliados-manager@alpes.com", "sms", "nueva-oportunidad"),
+                ("analytics@alpes.com", "slack", "nueva-campana-analytics")
+            ]
             
-            await self.publicar_evento_notificacion_solicitada(evento_notificacion)
+            for i, (dest, tipo, plantilla) in enumerate(destinatarios):
+                evento_notificacion = NotificacionSolicitada(
+                    id=f"notif-{comando.id}-{i+1}",
+                    destinatario=dest,
+                    tipo_notificacion=tipo,
+                    plantilla=plantilla,
+                    datos=f'{{"campana": "{comando.nombre}", "presupuesto": {comando.presupuesto}, "tipo": "{comando.tipo_campana}"}}',
+                    prioridad="alta" if i == 0 else "media",
+                    timestamp=comando.timestamp + i + 100
+                )
+                
+                await self.publicar_evento_notificacion_solicitada(evento_notificacion)
             
-            logger.info(f"✅ Comando procesado: Campaña {comando.nombre} creada con eventos publicados")
+            logger.info(f"📧 {len(destinatarios)} eventos NotificacionSolicitada publicados")
+            
+            # 4️⃣ Log de resumen
+            total_eventos = 1 + num_afiliados + len(destinatarios)
+            logger.info(f"✅ Campaña {comando.nombre} procesada → {total_eventos} eventos publicados")
+            logger.info(f"   📊 Distribución: 1 CampanaCreada + {num_afiliados} Comisiones + {len(destinatarios)} Notificaciones")
             
         except Exception as e:
-            logger.error(f"Error procesando comando crear campaña: {e}")
+            logger.error(f"❌ Error procesando comando crear campaña: {e}")
+            raise
 
 
 # Instancia global del despachador
