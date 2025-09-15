@@ -1,52 +1,204 @@
-# 🚀 AlpesPartner - Sistema de Gestión de Comisiones# 🚀 AlpesPartner - Sistema de Gestión de Comisiones
+# 🚀 AlpesPartner - Event-Driven Architecture
 
+Sistema distribuido de gestión de campañas, afiliados y comisiones con arquitectura de microservicios y comunicación asíncrona mediante Apache Pulsar.
 
+## 🏗️ Arquitectura
 
-Sistema distribuido de gestión de afiliados, conversiones y comisiones con arquitectura de microservicios y comunicación asíncrona mediante eventos Apache Pulsar.Sistema distribuido de gestión de afiliados, conversiones y comisiones con arquitectura de microservicios y comunicación asíncrona mediante eventos Apache Pulsar.
+```
+[BFF:9000] ──commands──> [Apache Pulsar] ──events──> [Marketing:8003]
+                             │                            │
+                             │                            ├─ MySQL (campañas)
+                             │                            └─ Comisiones
+                             │
+                          [Afiliados:8001] ─── MySQL (afiliados)
+                             │
+                          [Conversiones:8002] ─── MySQL (conversiones)
+```
 
+**Componentes Principales:**
+- **BFF (9000)**: API Gateway para comandos
+- **Marketing (8003)**: Gestión de campañas y comisiones
+- **Afiliados (8001)**: Gestión de afiliados
+- **Conversiones (8002)**: Gestión de conversiones
+- **Apache Pulsar (6650/8080)**: Message Broker
+- **MySQL**: Persistencia por servicio
 
+## � Despliegue Rápido
 
-## 📋 Tabla de Contenidos## 📋 Tabla de Contenidos
+### Prerrequisitos
+- Docker y Docker Compose
+- Python 3.11+ (para scripts de prueba)
+- curl y jq (opcional, para mejor formato)
 
+### 1. Levantar la infraestructura
+```bash
+# Clonar y navegar al directorio
+cd alpesPartner
 
+# Levantar todos los servicios
+docker-compose up -d
 
-1. [Arquitectura General](#-arquitectura-general)1. [Arquitectura General](#-arquitectura-general)
+# Verificar que todos los servicios estén corriendo
+docker-compose ps
+```
 
-2. [Estructura del Proyecto](#-estructura-del-proyecto)2. [Estructura del Proyecto](#-estructura-del-proyecto)
+### 2. Inicializar tópicos de Pulsar
+```bash
+# Ejecutar script de inicialización
+bash scripts/setup_pulsar_topics.sh
+```
 
-3. [Escenarios de Calidad](#-escenarios-de-calidad)3. [Escenarios de Calidad](#-escenarios-de-calidad)
+### 3. Verificar servicios activos
+```bash
+# BFF disponible
+curl http://localhost:9000/health
 
-4. [Instrucciones de Despliegue](#-instrucciones-de-despliegue)4. [Instrucciones de Despliegue](#-instrucciones-de-despliegue)
+# Pulsar Admin
+curl http://localhost:8080/admin/v2/persistent/public/default
 
-5. [APIs y Endpoints](#-apis-y-endpoints)5. [APIs y Endpoints](#-apis-y-endpoints)
+# Marketing service
+curl http://localhost:8003/health
+```
 
-6. [Monitoreo y Observabilidad](#-monitoreo-y-observabilidad)6. [Monitoreo y Observabilidad](#-monitoreo-y-observabilidad)
+## 📊 Uso del BFF - Crear Campaña
 
-7. [Pruebas y Validación](#-pruebas-y-validación)7. [Pruebas y Validación](#-pruebas-y-validación)
+### Endpoint Principal
+```bash
+POST http://localhost:9000/campanas
+Content-Type: application/json
+```
 
-8. [Troubleshooting](#-troubleshooting)8. [Troubleshooting](#-troubleshooting)
+### Ejemplo de Campaña
+```bash
+curl -X POST "http://localhost:9000/campanas" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "nombre": "Campaña Black Friday 2024",
+    "descripcion": "Campaña promocional de fin de año",
+    "fecha_inicio": "2024-11-25",
+    "fecha_fin": "2024-11-30",
+    "presupuesto": 50000.0,
+    "comision_porcentaje": 0.08,
+    "tags": ["blackfriday", "promocion"]
+  }'
+```
 
+### Respuesta
+```json
+{
+  "message": "Comando CrearCampana enviado",
+  "correlation_id": "uuid-generado",
+  "timestamp": "2024-11-25T10:30:00Z"
+}
+```
 
+## 🔍 Monitoreo de Eventos
 
-------
+### Tópicos de Pulsar
+- `marketing.campanas.comandos` - Comandos de creación de campañas
+- `marketing.eventos` - Eventos de campañas creadas
+- `marketing.comisiones.eventos` - Eventos de cálculo de comisiones
 
+### Consumir eventos en tiempo real
+```bash
+# Eventos de campañas
+docker exec -it alpes-pulsar bin/pulsar-client consume \
+  "persistent://public/default/marketing.eventos" \
+  -s "monitor-$(date +%s)" -p Latest
 
+# Eventos de comisiones
+docker exec -it alpes-pulsar bin/pulsar-client consume \
+  "persistent://public/default/marketing.comisiones.eventos" \
+  -s "monitor-comisiones-$(date +%s)" -p Latest
+```
 
-## 🏗️ Arquitectura General## 🏗️ Arquitectura General
+### Verificar persistencia en BD
+```bash
+# Campañas creadas
+docker exec -it alpes-mysql-marketing mysql -u alpes -palpes -D alpes_marketing \
+  -e "SELECT id, nombre, estado, presupuesto, creada_en FROM campanas ORDER BY creada_en DESC LIMIT 5;"
 
+# Comisiones calculadas
+docker exec -it alpes-mysql-marketing mysql -u alpes -palpes -D alpes_marketing \
+  -e "SELECT id, campaign_id, percentage, status, calculated_at FROM commission ORDER BY calculated_at DESC LIMIT 5;"
+```
 
+## 🧪 Escenarios de Prueba
 
-### Diseño de Alto Nivel### Diseño de Alto Nivel
+Ejecutar suite completa de pruebas:
+```bash
+# Todos los escenarios
+bash script_escenarios_pruebas.sh all
 
+# Escenarios específicos
+bash script_escenarios_pruebas.sh exitoso      # Flujo básico
+bash script_escenarios_pruebas.sh historico    # Consumo de eventos
+bash script_escenarios_pruebas.sh resiliencia  # Restart de servicios
+```
 
+## 📋 Estados y Flujo de Eventos
 
-``````
+### Flujo de Creación de Campaña
+1. **BFF recibe POST** → Valida payload → Genera `correlation_id`
+2. **Envía comando** → `marketing.campanas.comandos`
+3. **Marketing procesa** → Crea campaña en BD → Emite `CampanaCreada`
+4. **Handler comisiones** → Calcula comisión inicial → Emite `ComisionCalculada`
 
-┌─────────────────────────────────────────────────────────────────────────────┐┌─────────────────────────────────────────────────────────────────────────────┐
+### Estados de Campaña
+- `DRAFT` - Borrador inicial
+- `ACTIVE` - Campaña activa
+- `PAUSED` - Pausada temporalmente
+- `COMPLETED` - Finalizada
 
-│                        AlpesPartner Ecosystem                               ││                        AlpesPartner Ecosystem                               │
+### Monitoreo de Logs
+```bash
+# Logs del servicio marketing
+docker logs -f alpes-marketing
 
-├─────────────────────────────────────────────────────────────────────────────┤├─────────────────────────────────────────────────────────────────────────────┤
+# Logs del BFF
+docker logs -f alpes-bff
+
+# Logs de Pulsar
+docker logs -f alpes-pulsar
+```
+
+## 🛠️ Solución de Problemas
+
+### Servicios no responden
+```bash
+# Reiniciar servicios específicos
+docker-compose restart marketing
+docker-compose restart alpes-pulsar
+
+# Verificar conectividad de red
+docker network inspect alpespartner_alpes-network
+```
+
+### Pulsar no acepta mensajes
+```bash
+# Recrear tópicos
+docker exec -it alpes-pulsar bin/pulsar-admin topics delete persistent://public/default/marketing.eventos
+bash scripts/setup_pulsar_topics.sh
+```
+
+### Base de datos sin respuesta
+```bash
+# Verificar conexión MySQL
+docker exec -it alpes-mysql-marketing mysql -u alpes -palpes -e "SHOW DATABASES;"
+
+# Recrear esquema si es necesario
+docker exec -i alpes-mysql-marketing mysql -u alpes -palpes < db/init.sql
+```
+
+## 📝 URLs de Acceso
+
+- **BFF API**: http://localhost:9000
+- **Marketing Service**: http://localhost:8003  
+- **Pulsar Admin**: http://localhost:8080
+- **Pulsar Broker**: pulsar://localhost:6650
+
+---
+*Para documentación técnica completa, consultar: `ECOSYSTEM_DOCS.md`, `REPORTE_ARQUITECTURA.md`*
 
 │                                                                             ││                                                                             │
 

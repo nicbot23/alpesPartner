@@ -235,3 +235,29 @@ SUSCRIPCIONES = [
         'manejador': consumir_evento_afiliado_registrado
     }
 ]
+
+
+async def iniciar_consumidores():
+    """Inicializar todos los consumidores de eventos para marketing"""
+    logger.info("🔥 Iniciando consumidores de eventos para microservicio Marketing")
+    
+    # Por ahora, solo iniciar consumidores que tienen schemas válidos
+    tareas = []
+    for config_sub in SUSCRIPCIONES:
+        if isinstance(config_sub['schema'], str):
+            logger.info(f"   ⚠️ Saltando {config_sub['topico']} - schema pendiente de implementar")
+            continue
+            
+        tarea = asyncio.create_task(
+            suscribirse_a_topico(
+                config_sub['topico'],
+                config_sub['suscripcion'],
+                config_sub['schema'],
+                config_sub['manejador']
+            )
+        )
+        tareas.append(tarea)
+        logger.info(f"   ✅ Consumidor iniciado para tópico: {config_sub['topico']}")
+    
+    logger.info("🚀 Consumidores de marketing iniciados (algunos pendientes)")
+    return tareas

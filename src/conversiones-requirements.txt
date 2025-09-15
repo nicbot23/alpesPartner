@@ -12,8 +12,13 @@ sqlalchemy==2.0.23
 pymysql==1.1.0
 cryptography>=41.0.0,<46.0.0
 
+<<<<<<< HEAD:src/conversiones-requirements.txt
 # Messaging
 pulsar-client==3.3.0
+=======
+# Messaging - Pulsar con soporte Avro y async
+pulsar-client[avro]==3.3.0
+>>>>>>> entrega4-nicolas-feature:conversiones-requirements.txt
 
 # Utilidades
 python-multipart==0.0.6

@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from .config.api import config
 from .api.v1.router import router as v1_router
-from .consumidores import SUSCRIPCIONES, suscribirse_a_topico
+from .consumidores import iniciar_consumidores
 from .despachadores import despachador
 
 # Configurar logging
@@ -17,26 +17,15 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     """Gestión del ciclo de vida de la aplicación"""
     # Startup
-    logger.info("Iniciando servicio de marketing...")
+    logger.info("🔥 Iniciando servicio de marketing...")
     
     # Inicializar despachador
     await despachador.inicializar()
     
-    # Iniciar consumidores async
-    tareas_consumidores = []
-    for suscripcion in SUSCRIPCIONES:
-        tarea = asyncio.create_task(
-            suscribirse_a_topico(
-                suscripcion['topico'],
-                suscripcion['suscripcion'], 
-                suscripcion['schema'],
-                suscripcion['manejador']
-            )
-        )
-        tareas_consumidores.append(tarea)
-        logger.info(f"Iniciado consumidor para {suscripcion['topico']}")
+    # Iniciar consumidores de eventos
+    tareas_consumidores = await iniciar_consumidores()
     
-    logger.info("Servicio de marketing iniciado correctamente")
+    logger.info("🚀 Servicio de marketing iniciado correctamente")
     
     yield
     

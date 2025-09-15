@@ -130,22 +130,24 @@ services:
   pulsar:
     image: apachepulsar/pulsar:3.1.2
     container_name: alpes-pulsar
-    command: bash -c "bin/pulsar standalone"
+    command: bash -c "/pulsar/scripts/init_pulsar_topics.sh"
     environment:
       - PULSAR_MEM=-Xms512m -Xmx1024m -XX:MaxDirectMemorySize=1024m
+      - PULSAR_STANDALONE_USE_ZOOKEEPER=1
     ports:
       - "6650:6650"  # Pulsar broker
       - "8080:8080"  # Pulsar admin
     volumes:
       - pulsar-data:/pulsar/data
       - "./connectors/pulsar:/pulsar/connectors"
+      - "./scripts/init_pulsar_topics.sh:/pulsar/scripts/init_pulsar_topics.sh:ro"
     networks:
       - alpes-network
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/admin/v2/clusters"]
       timeout: 30s
-      retries: 10
-      start_period: 30s
+      retries: 15
+      start_period: 45s
 
   # =============================================================================
   # MICROSERVICIOS
@@ -168,6 +170,8 @@ services:
       
       # Apache Pulsar
       PULSAR_URL: pulsar://pulsar:6650
+      PULSAR_HOST: pulsar
+      PULSAR_PORT: 6650
       PULSAR_TENANT: public
       PULSAR_NAMESPACE: default
       
@@ -220,6 +224,8 @@ services:
       
       # Apache Pulsar
       PULSAR_URL: pulsar://pulsar:6650
+      PULSAR_HOST: pulsar
+      PULSAR_PORT: 6650
       PULSAR_TENANT: public
       PULSAR_NAMESPACE: default
       
@@ -273,6 +279,8 @@ services:
       
       # Apache Pulsar
       PULSAR_URL: pulsar://pulsar:6650
+      PULSAR_HOST: pulsar
+      PULSAR_PORT: 6650
       PULSAR_TENANT: public
       PULSAR_NAMESPACE: default
       
@@ -306,6 +314,32 @@ services:
       - alpes-network
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  # Backend For Frontend (BFF)
+  bff:
+    image: python:3.11-slim
+    container_name: alpes-bff
+    working_dir: /app
+    environment:
+      PULSAR_URL: pulsar://pulsar:6650
+      CAMPANAS_COMMANDS_TOPIC: persistent://public/default/marketing.campanas.comandos
+      MARKETING_EVENTS_TOPIC: persistent://public/default/marketing.eventos
+      COMISIONES_EVENTS_TOPIC: persistent://public/default/marketing.comisiones.eventos
+    command: ["bash", "-c", "pip install fastapi uvicorn pulsar-client && uvicorn src.bff.main:app --host 0.0.0.0 --port 9000"]
+    ports:
+      - "9000:9000"
+    volumes:
+      - ./src:/app/src
+    depends_on:
+      pulsar:
+        condition: service_healthy
+    networks:
+      - alpes-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/health"]
       timeout: 10s
       retries: 5
       start_period: 30s

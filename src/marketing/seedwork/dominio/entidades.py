@@ -236,11 +236,11 @@ class Campana(EntidadBase, GeneradorEventos):
         
         # Generar evento
         evento = CampanaCreada(
-            campana_id=self.id,
             nombre_campana=self.nombre,
-            tipo_campana=self.tipo.value,
-            usuario_id=self.creador_id
+            tipo_campana=self.tipo.value
         )
+        evento.campana_id = self.id
+        evento.usuario_id = self.creador_id
         self._agregar_evento(evento)
         self._actualizar_version()
     
@@ -271,9 +271,9 @@ class Campana(EntidadBase, GeneradorEventos):
         
         # Generar evento
         evento = CampanaActivada(
-            campana_id=self.id,
             presupuesto=self.configuracion.presupuesto_maximo
         )
+        evento.campana_id = self.id
         self._agregar_evento(evento)
         self._actualizar_version()
     
@@ -289,9 +289,9 @@ class Campana(EntidadBase, GeneradorEventos):
         
         # Generar evento
         evento = CampanaPausada(
-            campana_id=self.id,
             razon=razon
         )
+        evento.campana_id = self.id
         self._agregar_evento(evento)
         self._actualizar_version()
     
@@ -334,6 +334,13 @@ class Campana(EntidadBase, GeneradorEventos):
             return False
         
         return True
+    
+    def validar(self):
+        """Validar invariantes de la entidad Campana"""
+        # Básico: nombre no vacío
+        if hasattr(self, 'nombre') and self.nombre and not self.nombre.strip():
+            raise ValueError("Nombre de campaña no puede estar vacío")
+        # Otras validaciones pueden agregarse aquí según evolucionen las reglas de negocio
 
 # Entidad Agregado - Segmento
 @dataclass
@@ -368,11 +375,11 @@ class Segmento(EntidadBase, GeneradorEventos):
         
         # Generar evento
         evento = SegmentoCreado(
-            segmento_id=self.id,
             nombre_segmento=self.nombre,
-            tipo_segmento=self.tipo.value,
-            usuario_id=self.creador_id
+            tipo_segmento=self.tipo.value
         )
+        evento.segmento_id = self.id
+        evento.usuario_id = self.creador_id
         self._agregar_evento(evento)
         self._actualizar_version()
     
@@ -426,6 +433,13 @@ class Segmento(EntidadBase, GeneradorEventos):
         """Desactiva el segmento"""
         self.activo = False
         self._actualizar_version()
+    
+    def validar(self):
+        """Validar invariantes de la entidad Segmento"""
+        # Básico: nombre no vacío
+        if hasattr(self, 'nombre') and self.nombre and not self.nombre.strip():
+            raise ValueError("Nombre de segmento no puede estar vacío")
+        # Otras validaciones pueden agregarse aquí según evolucionen las reglas de negocio
 
 # Interfaces de repositorio específicas
 class RepositorioCampanas(ABC):

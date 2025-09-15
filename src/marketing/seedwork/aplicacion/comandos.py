@@ -133,6 +133,14 @@ class InterceptorComando(ABC):
         """Se ejecuta cuando hay error en el comando"""
         pass
 
+@dataclass
+class ComandoConRespuesta(Comando):
+    """Comando que espera un resultado específico.
+    Se mantiene para compatibilidad con imports existentes.
+    """
+    # Puede ampliarse con campos adicionales si se requiere
+    pass
+
 class BusComandosImplemetacion(BusComandos):
     """
     Implementación concreta del bus de comandos
@@ -252,3 +260,6 @@ class FabricaBusComandos(ABC):
     def crear_repositorio_comandos(self) -> RepositorioComandos:
         """Crea una instancia del repositorio de comandos"""
         pass
+
+# Alias para mantener nombre usado en __init__ (corrección de typo)
+BusComandosImplementacion = BusComandosImplemetacion

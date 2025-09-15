@@ -26,6 +26,14 @@ class Consulta(ABC):
             self.correlation_id = self.id
 
 @dataclass
+class ConsultaConPaginacion(Consulta):
+    """Consulta base que incluye parámetros de paginación.
+    Se agrega para satisfacer import del seedwork y facilitar queries paginadas.
+    """
+    pagina: int = 1
+    tamaño_pagina: int = 20
+
+@dataclass
 class ResultadoPaginado:
     """
     Resultado paginado para consultas
