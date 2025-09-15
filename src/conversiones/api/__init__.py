@@ -1,3 +1,0 @@
-"""
-Inicialización API v1
-"""
