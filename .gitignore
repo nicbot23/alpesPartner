@@ -31,49 +31,7 @@ __pycache__/
 logs/
 *.out
 
-# Datos Temporales
-data/events.jsonl
-reporte_escenarios_calidad.json
 
-# Archivos de Entrega Académica (INNECESARIOS PARA MAIN)
-003-EntregaTemplate.pdf
-003-EntregaTemplate.txt
-Entrega-004y005-POCArquitecturaEnunciado.pdf
-Entrega-004y005-POCArquitecturaEnunciado.txt
-enunciado.txt
-template.txt
-recomendaciones-entrega4.txt
-
-# Scripts de Testing y Desarrollo Temporal (INNECESARIOS PARA MAIN)
-advanced_cdc_test.py
-analisis_formato_mensajes.py
-api_simple.py
-cdc_robust_test.sh
-consumer_cdc.py
-consumer_integration_demo.py
-demo_integracion_microservicios.py
-demo_video.py
-estrategia_crud_eventsourcing.py
-extract_pdf.py
-manual_cdc.py
-monitor_estadisticas_real_time.py
-monitor_simple_tiempo_real.py
-monitor_tiempo_real.py
-monitor_topicos.py
-schema_registry.py
-simple-debezium-config.json
-simulador_escenarios_calidad.py
-test-cdc-complete.sh
-test_campanas_mysql.py
-test_escenarios_calidad.py
-test_eventos_integracion.py
-test_flujo_completo_negocio.py
-test_integracion_completa.py
-topologia_descentralizada.py
-verify_pulsar_events.py
-
-# Tutorial Material (INNECESARIO PARA MAIN)
-tutorial-8-sagas/
 
 # Backups
 README_backup.md
