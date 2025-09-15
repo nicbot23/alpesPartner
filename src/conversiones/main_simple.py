@@ -35,18 +35,10 @@ async def startup_event():
     
     # Importar y configurar consumidores
     try:
-        from .consumidores import SUSCRIPCIONES, suscribirse_a_topico
+        from .consumidores import iniciar_consumidores_background
         
         # Iniciar consumidores en background
-        for config in SUSCRIPCIONES:
-            asyncio.create_task(
-                suscribirse_a_topico(
-                    config['topico'],
-                    config['suscripcion'],
-                    config['schema']
-                )
-            )
-            logger.info(f"✅ Consumidor iniciado: {config['topico']} -> {config['suscripcion']}")
+        await iniciar_consumidores_background()
         
         logger.info("🎯 Conversiones listo para escuchar eventos de campañas")
         

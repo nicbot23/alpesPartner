@@ -12,9 +12,8 @@ sqlalchemy==2.0.23
 pymysql==1.1.0
 cryptography>=41.0.0,<46.0.0
 
-# Messaging
-pulsar-client==3.3.0
-# aiopulsar==3.3.0  # Comentado hasta resolver dependencia
+# Messaging - Pulsar con soporte Avro y async
+pulsar-client[avro]==3.3.0
 
 # Utilidades
 python-multipart==0.0.6

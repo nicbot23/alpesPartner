@@ -189,4 +189,20 @@ async def iniciar_consumidores():
         logging.info(f"🔄 Iniciando consumidor para {config['topico']}")
     
     # Ejecutar todos los consumidores concurrentemente
-    await asyncio.gather(*tareas)
+    try:
+        await asyncio.gather(*tareas)
+    except Exception as e:
+        logging.error(f"❌ Error en consumidores: {e}")
+
+
+async def iniciar_consumidores_background():
+    """Iniciar consumidores en background tasks"""
+    for config in SUSCRIPCIONES:
+        asyncio.create_task(
+            suscribirse_a_topico(
+                config['topico'],
+                config['suscripcion'], 
+                config['schema']
+            )
+        )
+        logging.info(f"🔄 Consumidor iniciado en background: {config['topico']}")
