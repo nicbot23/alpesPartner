@@ -1,43 +1,365 @@
 version: "3.9"
+
+# Red personalizada para comunicación entre servicios
+networks:
+  alpes-network:
+    driver: bridge
+
+# Volúmenes para persistencia
+volumes:
+  mysql-data:
+  mysql-conversiones-data:
+  mysql-afiliados-data:
+  pulsar-data:
+  redis-data:
+
 services:
-  mysql:
+  # =============================================================================
+  # INFRAESTRUCTURA DE DATOS
+  # =============================================================================
+  
+  # Base de datos principal - Marketing (Campañas, Comisiones)
+  mysql-marketing:
     image: mysql:8.0
+    container_name: alpes-mysql-marketing
     environment:
       MYSQL_ROOT_PASSWORD: debezium
-      MYSQL_DATABASE: alpes
+      MYSQL_DATABASE: alpes_marketing
       MYSQL_USER: alpes
       MYSQL_PASSWORD: alpes
-    command: ["mysqld","--server-id=223344","--log-bin=mysql-bin","--binlog_format=ROW","--binlog_row_image=FULL","--gtid_mode=ON","--enforce_gtid_consistency=ON"]
-    ports: ["3306:3306"]
-    volumes: [ "./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro" ]
+    command: [
+      "mysqld",
+      "--server-id=223344",
+      "--log-bin=mysql-bin",
+      "--binlog_format=ROW", 
+      "--binlog_row_image=FULL",
+      "--gtid_mode=ON",
+      "--enforce_gtid_consistency=ON"
+    ]
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - "./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro"
+    networks:
+      - alpes-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
+  
+  # Base de datos Conversiones
+  mysql-conversiones:
+    image: mysql:8.0
+    container_name: alpes-mysql-conversiones
+    environment:
+      MYSQL_ROOT_PASSWORD: debezium
+      MYSQL_DATABASE: alpes_conversiones
+      MYSQL_USER: alpes
+      MYSQL_PASSWORD: alpes
+    command: [
+      "mysqld",
+      "--server-id=223345",
+      "--log-bin=mysql-bin",
+      "--binlog_format=ROW",
+      "--binlog_row_image=FULL", 
+      "--gtid_mode=ON",
+      "--enforce_gtid_consistency=ON"
+    ]
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql-conversiones-data:/var/lib/mysql
+      - "./db/conversiones_init.sql:/docker-entrypoint-initdb.d/conversiones_init.sql:ro"
+    networks:
+      - alpes-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
+  
+  # Base de datos Afiliados
+  mysql-afiliados:
+    image: mysql:8.0
+    container_name: alpes-mysql-afiliados
+    environment:
+      MYSQL_ROOT_PASSWORD: debezium
+      MYSQL_DATABASE: alpes_afiliados
+      MYSQL_USER: alpes
+      MYSQL_PASSWORD: alpes
+    command: [
+      "mysqld",
+      "--server-id=223346", 
+      "--log-bin=mysql-bin",
+      "--binlog_format=ROW",
+      "--binlog_row_image=FULL",
+      "--gtid_mode=ON",
+      "--enforce_gtid_consistency=ON"
+    ]
+    ports:
+      - "3308:3306"
+    volumes:
+      - mysql-afiliados-data:/var/lib/mysql
+      - "./db/afiliados_init.sql:/docker-entrypoint-initdb.d/afiliados_init.sql:ro"
+    networks:
+      - alpes-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
+
+  # Redis para cache
+  redis:
+    image: redis:7-alpine
+    container_name: alpes-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - alpes-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      timeout: 10s
+      retries: 5
+
+  # =============================================================================
+  # APACHE PULSAR - EVENT STREAMING
+  # =============================================================================
+  
   pulsar:
     image: apachepulsar/pulsar:3.1.2
+    container_name: alpes-pulsar
     command: bash -c "bin/pulsar standalone"
-    ports: ["6650:6650","8080:8080"]
-    volumes: [ "./connectors/pulsar:/pulsar/connectors" ]
-  api:
-    build: { context: ".", dockerfile: Dockerfile }
     environment:
-      FLASK_APP: src/aeroalpes/api/app.py
-      DATABASE_URL: mysql+pymysql://alpes:alpes@mysql:3306/alpes
-      PULSAR_URL: pulsar://pulsar:6650
-    volumes: [ "./src:/app/src", "./data:/app/data" ]
-    depends_on: ["mysql","pulsar"]
-    ports: ["5001:5000"]
-  notificaciones:
-    build: { context: ".", dockerfile: Dockerfile }
-    command: ["python","-m","aeroalpes.modulos.comisiones.infraestructura.consumer"]
+      - PULSAR_MEM=-Xms512m -Xmx1024m -XX:MaxDirectMemorySize=1024m
+    ports:
+      - "6650:6650"  # Pulsar broker
+      - "8080:8080"  # Pulsar admin
+    volumes:
+      - pulsar-data:/pulsar/data
+      - "./connectors/pulsar:/pulsar/connectors"
+    networks:
+      - alpes-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/admin/v2/clusters"]
+      timeout: 30s
+      retries: 10
+      start_period: 30s
+
+  # =============================================================================
+  # MICROSERVICIOS
+  # =============================================================================
+  
+  # Microservicio Afiliados
+  afiliados:
+    build:
+      context: .
+      dockerfile: afiliados.Dockerfile
+    container_name: alpes-afiliados
     environment:
+      # Base de datos
+      DATABASE_URL: mysql+pymysql://alpes:alpes@mysql-afiliados:3306/alpes_afiliados
+      DB_HOST: mysql-afiliados
+      DB_PORT: 3306
+      DB_NAME: alpes_afiliados
+      DB_USER: alpes
+      DB_PASSWORD: alpes
+      
+      # Apache Pulsar
       PULSAR_URL: pulsar://pulsar:6650
-      TOPIC_OUTBOX: persistent://public/default/alpes-mysql.alpes.outbox_event
-      EVENT_STORE: /app/data/events.jsonl
-    volumes: [ "./src:/app/src", "./data:/app/data" ]
-    depends_on: ["pulsar"]
-  commands:
-    build: { context: ".", dockerfile: Dockerfile }
-    command: ["python","-m","aeroalpes.modulos.comisiones.infraestructura.commands_consumer"]
+      PULSAR_TENANT: public
+      PULSAR_NAMESPACE: default
+      
+      # Cache Redis
+      REDIS_URL: redis://redis:6379/0
+      
+      # Configuración aplicación
+      APP_HOST: 0.0.0.0
+      APP_PORT: 8000
+      LOG_LEVEL: INFO
+      ENVIRONMENT: development
+      
+      # Eventos
+      AFILIADOS_EVENTS_TOPIC: persistent://public/default/afiliados.eventos
+      COMISIONES_EVENTS_TOPIC: persistent://public/default/marketing.comisiones.eventos
+    ports:
+      - "8001:8000"
+    volumes:
+      - "./src:/app/src"
+      - "./data:/app/data"
+    depends_on:
+      mysql-afiliados:
+        condition: service_healthy
+      pulsar:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - alpes-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+  
+  # Microservicio Conversiones
+  conversiones:
+    build:
+      context: .
+      dockerfile: conversiones.Dockerfile
+    container_name: alpes-conversiones
     environment:
+      # Base de datos
+      DATABASE_URL: mysql+pymysql://alpes:alpes@mysql-conversiones:3306/alpes_conversiones
+      DB_HOST: mysql-conversiones
+      DB_PORT: 3306
+      DB_NAME: alpes_conversiones
+      DB_USER: alpes
+      DB_PASSWORD: alpes
+      
+      # Apache Pulsar
       PULSAR_URL: pulsar://pulsar:6650
-      TOPIC_CMDS: persistent://public/default/commands
-    volumes: [ "./src:/app/src" ]
-    depends_on: ["pulsar"]
+      PULSAR_TENANT: public
+      PULSAR_NAMESPACE: default
+      
+      # Cache Redis
+      REDIS_URL: redis://redis:6379/1
+      
+      # Configuración aplicación
+      APP_HOST: 0.0.0.0
+      APP_PORT: 8000
+      LOG_LEVEL: INFO
+      ENVIRONMENT: development
+      
+      # Eventos
+      CONVERSIONES_EVENTS_TOPIC: persistent://public/default/conversiones.eventos
+      MARKETING_EVENTS_TOPIC: persistent://public/default/marketing.comisiones.eventos
+      AFILIADOS_EVENTS_TOPIC: persistent://public/default/afiliados.eventos
+    ports:
+      - "8002:8000"
+    volumes:
+      - "./src:/app/src"
+      - "./data:/app/data"
+    depends_on:
+      mysql-conversiones:
+        condition: service_healthy
+      pulsar:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - alpes-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+  
+  # Microservicio Marketing (Coordinador Central)
+  marketing:
+    build:
+      context: .
+      dockerfile: marketing.Dockerfile
+    container_name: alpes-marketing
+    environment:
+      # Base de datos
+      DATABASE_URL: mysql+pymysql://alpes:alpes@mysql-marketing:3306/alpes_marketing
+      DB_HOST: mysql-marketing
+      DB_PORT: 3306
+      DB_NAME: alpes_marketing
+      DB_USER: alpes
+      DB_PASSWORD: alpes
+      
+      # Apache Pulsar
+      PULSAR_URL: pulsar://pulsar:6650
+      PULSAR_TENANT: public
+      PULSAR_NAMESPACE: default
+      
+      # Cache Redis
+      REDIS_URL: redis://redis:6379/2
+      
+      # Configuración aplicación
+      APP_HOST: 0.0.0.0
+      APP_PORT: 8000
+      LOG_LEVEL: INFO
+      ENVIRONMENT: development
+      
+      # Eventos
+      MARKETING_EVENTS_TOPIC: persistent://public/default/marketing.eventos
+      COMISIONES_EVENTS_TOPIC: persistent://public/default/marketing.comisiones.eventos
+      AFILIADOS_EVENTS_TOPIC: persistent://public/default/afiliados.eventos
+      CONVERSIONES_EVENTS_TOPIC: persistent://public/default/conversiones.eventos
+    ports:
+      - "8003:8000"
+    volumes:
+      - "./src:/app/src"
+      - "./data:/app/data"
+    depends_on:
+      mysql-marketing:
+        condition: service_healthy
+      pulsar:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - alpes-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  # =============================================================================
+  # HERRAMIENTAS DE MONITOREO Y ADMINISTRACIÓN
+  # =============================================================================
+  
+  # Pulsar Manager para administración web de Pulsar
+  pulsar-manager:
+    image: apachepulsar/pulsar-manager:v0.3.0
+    container_name: alpes-pulsar-manager
+    environment:
+      SPRING_CONFIGURATION_FILE: /pulsar-manager/pulsar-manager/application.properties
+      REDIRECT_HOST: http://localhost
+      REDIRECT_PORT: 9527
+      DRIVER_CLASS_NAME: org.postgresql.Driver
+      URL: jdbc:postgresql://127.0.0.1:5432/pulsar_manager
+      USERNAME: pulsar
+      PASSWORD: pulsar
+    ports:
+      - "9527:9527"
+    depends_on:
+      - pulsar
+    networks:
+      - alpes-network
+
+  # Redis Commander para administración web de Redis
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: alpes-redis-commander
+    environment:
+      REDIS_HOSTS: local:redis:6379
+    ports:
+      - "8081:8081"
+    depends_on:
+      - redis
+    networks:
+      - alpes-network
+
+  # phpMyAdmin para administración de bases de datos
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin:latest
+    container_name: alpes-phpmyadmin
+    environment:
+      PMA_ARBITRARY: 1
+      PMA_HOSTS: mysql-marketing,mysql-conversiones,mysql-afiliados
+      PMA_USER: alpes
+      PMA_PASSWORD: alpes
+    ports:
+      - "8082:80"
+    depends_on:
+      - mysql-marketing
+      - mysql-conversiones
+      - mysql-afiliados
+    networks:
+      - alpes-network

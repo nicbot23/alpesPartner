@@ -1,0 +1,1 @@
+# Bounded Context Campañas - Dominio
