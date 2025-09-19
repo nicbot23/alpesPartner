@@ -160,7 +160,14 @@ async def lifespan(app: FastAPI):
             consumidor = cliente.subscribe(topico_cmd, subscription_name='marketing-campanas-cmd-sub')
             logger.info(f"🛰️ Consumidor de comandos Campañas escuchando {topico_cmd}")
             while True:
-                msg = consumidor.receive(timeout_millis=30000)
+                try:
+                    msg = consumidor.receive(timeout_millis=30000)
+                except pulsar.Timeout:
+                    # No hay mensajes por ahora: continuar sin loguear error fatal
+                    continue
+                except Exception as e:
+                    logger.error(f"[Campañas][CommandConsumer] Error recibiendo del tópico: {e}")
+                    continue
                 try:
                     data = json.loads(msg.data())
                     if data.get('command') == 'CrearCampana':
