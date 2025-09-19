@@ -7,64 +7,22 @@ from fastapi import FastAPI
 from contextlib import asynccontextmanager
 from afiliados.config.api import config
 from afiliados.api.v1.afiliados.router import router as afiliados_router
-<<<<<<< HEAD
-from consumidores import SUSCRIPCIONES, suscribirse_a_topico
-from despachadores import despachador
-=======
 from afiliados.modulos.afiliados.infraestructura.despachadores import DespachadorEventosPulsar
 from consumidores import iniciar_consumidores
->>>>>>> entrega4-nicolas-feature
 
 # Configurar logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-<<<<<<< HEAD
-=======
 # Instancias globales
 despachador_eventos = DespachadorEventosPulsar()
 
->>>>>>> entrega4-nicolas-feature
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Gestión del ciclo de vida de la aplicación"""
     # Startup
     logger.info("🔥 Iniciando microservicio de Afiliados")
     
-<<<<<<< HEAD
-    # Inicializar despachador
-    await despachador.inicializar()
-    
-    # Iniciar consumidores async
-    tareas_consumidores = []
-    for suscripcion in SUSCRIPCIONES:
-        tarea = asyncio.create_task(
-            suscribirse_a_topico(
-                suscripcion['topico'],
-                suscripcion['suscripcion'], 
-                suscripcion['schema'],
-                suscripcion['manejador']
-            )
-        )
-        tareas_consumidores.append(tarea)
-        logger.info(f"Iniciado consumidor para {suscripcion['topico']}")
-    
-    logger.info("Microservicio de Afiliados iniciado correctamente")
-    
-    yield
-    
-    # Shutdown
-    logger.info("Deteniendo microservicio de Afiliados")
-    
-    # Cancelar tareas de consumidores
-    for tarea in tareas_consumidores:
-        tarea.cancel()
-    
-    # Cerrar despachador
-    await despachador.cerrar()
-    
-    logger.info("Microservicio de Afiliados detenido")
-=======
     try:
         # Inicializar despachador de eventos
         await despachador_eventos.start()
@@ -89,7 +47,6 @@ async def lifespan(app: FastAPI):
             
         except Exception as e:
             logger.error(f"Error durante shutdown de Afiliados: {e}")
->>>>>>> entrega4-nicolas-feature
 
 # Crear aplicación FastAPI
 app = FastAPI(

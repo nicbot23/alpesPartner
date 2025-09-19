@@ -243,11 +243,7 @@ class ComisionCalculada(EventoDominio):
             "campana_id": self.campana_id,
             "afiliado_id": self.afiliado_id,
             "conversion_id": self.conversion_id,
-<<<<<<< HEAD
-            "monto_comision": self.monto_comision.to_dict() if self.monto_comision else {},
-=======
             "monto_comision": self.monto_comision.to_dict() if self.monto_comision else None,
->>>>>>> entrega4-nicolas-feature
             "porcentaje_aplicado": self.porcentaje_aplicado.to_float() if self.porcentaje_aplicado else 0.0,
             "fecha_calculo": self.fecha_calculo.isoformat()
         }

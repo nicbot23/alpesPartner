@@ -3,10 +3,6 @@ Eventos de dominio base para el microservicio Marketing
 Implementa principios SOLID y patrones de eventos
 """
 from abc import ABC, abstractmethod
-<<<<<<< HEAD
-from typing import Protocol
-=======
->>>>>>> entrega4-nicolas-feature
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import List, Optional, Dict, Any, TypeVar, Protocol

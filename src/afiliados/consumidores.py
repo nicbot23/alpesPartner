@@ -6,24 +6,7 @@ import pulsar
 from .config.api import config
 from .comandos import ComandoRegistrarAfiliado, ComandoActualizarAfiliado, ComandoDesactivarAfiliado, ComandoValidarAfiliado
 from .eventos import AfiliadoRegistrado, AfiliadoActualizado, AfiliadoDesactivado, AfiliadoValidado
-<<<<<<< HEAD
-from .utils import time_millis, generar_uuid, timestamp_utc
-from .despachadores import despachador
-
-# Definir localmente eventos de otros microservicios que consumimos
-@dataclass
-class CampanaCreada:
-    """Evento de campaña creada desde marketing microservice"""
-    campana_id: str = ""
-    nombre: str = ""
-    descripcion: str = ""
-    fecha_inicio: str = ""
-    fecha_fin: str = ""
-    tipo_campana: str = ""
-    metadatos: dict = field(default_factory=dict)
-=======
 from .utils import time_millis, generar_uuid
->>>>>>> entrega4-nicolas-feature
 
 logger = logging.getLogger(__name__)
 
@@ -104,33 +87,6 @@ async def consumir_comando_validar_afiliado(comando: ComandoValidarAfiliado):
     # Emitir evento AfiliadoValidado
 
 
-<<<<<<< HEAD
-async def consumir_evento_campana_creada(evento: CampanaCreada):
-    """Procesar evento de campaña creada desde marketing"""
-    logger.info(f"🔥 Evento recibido: Campaña creada '{evento.nombre}' (ID: {evento.id})")
-    
-    try:
-        # Crear afiliado automático para la campaña
-        comando_registro = ComandoRegistrarAfiliado(
-            id=generar_uuid(),
-            user_id=f"afiliado-auto-{evento.id}",
-            email=f"afiliado-{evento.id}@alpes.com",
-            nombre=f"Afiliado Auto {evento.nombre}",
-            apellido="Sistema",
-            numero_documento=f"AUTO{evento.id[:8]}",
-            tipo_documento="CC",
-            telefono="+571234567890",
-            timestamp=time_millis()
-        )
-        
-        # Procesar el comando de registro
-        await consumir_comando_registrar_afiliado(comando_registro)
-        
-        logger.info(f"✅ Afiliado automático creado para campaña {evento.nombre}")
-        
-    except Exception as e:
-        logger.error(f"❌ Error creando afiliado automático para campaña {evento.id}: {e}")
-=======
 async def consumir_evento_campana_creada(evento):
     """Procesar evento de campaña creada - crear afiliaciones automáticamente"""
     logger.info(f"🎯 Campaña creada detectada: {evento.nombre}")
@@ -165,7 +121,6 @@ async def consumir_evento_campana_creada(evento):
         await consumir_comando_registrar_afiliado(comando_registro)
     
     logger.info(f"🚀 Procesamiento automático de campaña {evento.nombre} completado")
->>>>>>> entrega4-nicolas-feature
 
 
 # Configuración de suscripciones
@@ -194,18 +149,10 @@ SUSCRIPCIONES = [
         'schema': ComandoValidarAfiliado,
         'manejador': consumir_comando_validar_afiliado
     },
-<<<<<<< HEAD
-    # 🔥 Nueva suscripción para eventos de marketing
-    {
-        'topico': 'persistent://public/default/marketing.eventos',
-        'suscripcion': 'afiliados-marketing-eventos-sub',
-        'schema': CampanaCreada,
-=======
     {
         'topico': 'marketing.eventos',
         'suscripcion': 'afiliados-campana-creada-sub',
         'schema': 'CampanaCreada',  # Schema del microservicio de marketing
->>>>>>> entrega4-nicolas-feature
         'manejador': consumir_evento_campana_creada
     }
 ]

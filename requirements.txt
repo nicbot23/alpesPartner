@@ -11,3 +11,6 @@ PyDispatcher==2.0.7
 mysql-connector-python==9.1.0
 avro-python3==1.10.2
 requests
+fastapi
+uvicorn
+httpx
