@@ -12,6 +12,7 @@ class PulsarPublisherCampanas:
         self.client = None
         self.producers = {}
         self._pulsar_url = os.getenv('PULSAR_URL', 'pulsar://pulsar:6650')
+        self._marketing_events_topic = os.getenv("MARKETING_EVENTS_TOPIC", "persistent://public/default/marketing.eventos")
 
     async def inicializar(self):
         if not self.client:
@@ -27,7 +28,7 @@ class PulsarPublisherCampanas:
         return self.producers[topic]
 
     async def publicar_campana_creada(self, payload: Dict):
-        await self._publicar('marketing.eventos', payload, 'CampanaCreada')
+        await self._publicar(self._marketing_events_topic, payload, 'CampanaCreada')
 
     async def publicar_comision_configurada(self, payload: Dict):
         await self._publicar('comisiones.eventos', payload, 'ComisionCalculada')
@@ -41,7 +42,7 @@ class PulsarPublisherCampanas:
                 await self.inicializar()
             producer = self._get_producer(topic)
             producer.send(json.dumps(payload).encode('utf-8'))
-            logger.info(f"📡 [{etiqueta}] publicado en {topic}")
+            logger.info(f"📡 [{etiqueta}] publicado en {topic} con correlation_id={payload.get('correlation_id', 'None')}")
         except Exception as e:
             logger.error(f"❌ Error publicando {etiqueta} en {topic}: {e}")
 

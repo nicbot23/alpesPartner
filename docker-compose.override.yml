@@ -1,0 +1,34 @@
+services:
+  afiliados:
+    command: >
+      python -m uvicorn afiliados.main_simple:app
+      --host 0.0.0.0 --port 8000
+
+  conversiones:
+    command: >
+      python -m uvicorn conversiones.main_simple:app
+      --host 0.0.0.0 --port 8000
+
+  bff:
+    image: python:3.11-slim
+    container_name: alpes-bff
+    working_dir: /app/src
+    volumes:
+      - ./:/app
+    environment:
+      MARKETING_URL: "http://marketing:8000"
+      PULSAR_URL: "pulsar://pulsar:6650"
+      # opcional: BFF_API_KEY: "secreta123"
+    command: >
+      bash -lc "pip install --no-cache-dir -r /app/requirements.txt &&
+                python -m uvicorn bff.main:app --host 0.0.0.0 --port 9000"
+    ports:
+      - "9000:9000"
+    depends_on:
+      - marketing
+      - pulsar
+    healthcheck:
+      test: ["CMD","python","-c","import urllib.request as u; u.urlopen('http://localhost:9000/health')"]
+      interval: 10s
+      timeout: 3s
+      retries: 5

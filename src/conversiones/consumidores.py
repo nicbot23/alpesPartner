@@ -66,13 +66,8 @@ async def procesar_mensaje(datos, topico: str):
             await procesar_comando_rechazar_conversion(datos)
         elif "comando-cancelar-conversion" in topico:
             await procesar_comando_cancelar_conversion(datos)
-<<<<<<< HEAD
-        elif "afiliados.eventos" in topico:
-            await procesar_evento_afiliado_registrado(datos)
-=======
         elif "marketing.eventos" in topico:
             await procesar_evento_marketing(datos)
->>>>>>> entrega4-nicolas-feature
         else:
             logging.warning(f"⚠️ Tipo de tópico no reconocido: {topico}")
             
@@ -159,56 +154,11 @@ async def procesar_comando_cancelar_conversion(datos):
     logging.info(f"🚫 Procesando comando cancelar conversión: {datos}")
     # TODO: Implementar lógica para cancelar conversión
 
-<<<<<<< HEAD
-async def procesar_evento_afiliado_registrado(datos):
-    """Procesar evento de afiliado registrado desde microservicio de afiliados"""
-    logging.info(f"🔥 Evento recibido: Afiliado registrado {datos}")
-    
-    try:
-        # Verificar que es un evento de afiliado registrado
-        if hasattr(datos, 'user_id') and hasattr(datos, 'estado'):
-            if datos.estado == "activo":
-                # Generar conversión automática para el afiliado
-                import random
-                from datetime import datetime
-                
-                conversion_data = {
-                    "user_id": datos.user_id,
-                    "afiliado_id": datos.user_id,
-                    "valor_conversion": round(random.uniform(100, 1000), 2),
-                    "tipo_conversion": "registro_automatico",
-                    "fecha_conversion": datetime.now().isoformat(),
-                    "automatica": True,
-                    "metadata": {
-                        "generado_por": "evento_afiliado",
-                        "email_afiliado": getattr(datos, 'email', ''),
-                        "nombre_afiliado": f"{getattr(datos, 'nombre', '')} {getattr(datos, 'apellido', '')}"
-                    }
-                }
-                
-                logging.info(f"🎯 Generando conversión automática para afiliado {datos.user_id}")
-                
-                # TODO: Publicar evento ConversionRegistrada usando el despachador
-                # await despachador.publicar_evento_conversion_registrada(conversion_data)
-                
-                logging.info(f"✅ Conversión automática generada para afiliado {datos.user_id}")
-        else:
-            logging.warning(f"⚠️ Evento de afiliado incompleto: {datos}")
-            
-    except Exception as e:
-        logging.error(f"❌ Error procesando evento de afiliado registrado: {e}")
-
-# Configuración de suscripciones
-SUSCRIPCIONES = [
-    {
-        'topico': 'afiliados.eventos',
-        'suscripcion': 'conversiones-afiliados-eventos',
-        'schema': AfiliadoRegistrado,
-        'manejador': procesar_evento_afiliado_registrado
-    },
-    # Agregar más suscripciones según necesidad
-]
-=======
+# `<<<<<<<` is a version control conflict marker that indicates the beginning of a conflict in a file.
+# It is used to highlight areas where conflicting changes have been made by different contributors in
+# a version control system like Git. When you see `<<<<<<<`, it means that there are conflicting
+# changes that need to be resolved manually by choosing which changes to keep and which to discard
+# before finalizing the merge or rebase process.
 
 # Configuración de suscripciones para Conversiones
 SUSCRIPCIONES = [
@@ -266,4 +216,3 @@ async def iniciar_consumidores_background():
             )
         )
         logging.info(f"🔄 Consumidor iniciado en background: {config['topico']}")
->>>>>>> entrega4-nicolas-feature

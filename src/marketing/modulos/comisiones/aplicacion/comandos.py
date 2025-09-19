@@ -14,12 +14,8 @@ import uuid
 
 from ..dominio.entidades import (
     Comision, EstadoComision, TipoComision, MontoMonetario, 
-<<<<<<< HEAD
-    PorcentajeComision, ConfiguracionComision, MetodoCalculo,
-=======
     PorcentajeComision, ConfiguracionComision,
     # CriterioCalculoComision,  # Comentado: clase no existe
->>>>>>> entrega4-nicolas-feature
     ExcepcionDominio, EventoDominio
 )
 
