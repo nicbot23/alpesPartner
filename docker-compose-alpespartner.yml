@@ -390,7 +390,7 @@ services:
       - APP_HOST=0.0.0.0
       - APP_PORT=8000
       - LOG_LEVEL=INFO
-      # - AFILIADOS_FORCE_FAIL=true   # opcional para probar compensación
+      - AFILIADOS_FORCE_FAIL=true   # opcional para probar compensación
     ports:
       - "8003:8000"
     depends_on:

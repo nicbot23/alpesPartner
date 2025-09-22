@@ -1,63 +1,257 @@
-# AlpesPartner Docker Compose
+docker-compose -f docker-compose-alpespartner.yml --profile alpespartner up --build
+docker-compose -f docker-compose-alpespartner.yml --profile infrastructure up -d
+docker-compose -f docker-compose-alpespartner.yml --profile infrastructure --profile bff --profile campanias up --build
+docker-compose -f docker-compose-alpespartner.yml --profile pulsar up -d
+docker-compose -f docker-compose-alpespartner.yml --profile database up -d
+docker-compose -f docker-compose-alpespartner.yml build --no-cache
 
-Este archivo contiene la configuración **completamente autónoma** de Docker Compose para los microservicios de AlpesPartner, incluyendo toda la infraestructura necesaria.
 
-## Prerequisitos
+# ✨ Bienvenido a AlpesPartner
 
-**NINGUNO** - Este docker-compose es completamente autónomo e incluye:
-- ✅ **Apache Pulsar completo** (Zookeeper, Bookie, Broker, Pulsar-init)
-- ✅ **MySQL 8** para persistencia
-- ✅ **Redes independientes**
-- ✅ **Volúmenes persistentes**
+<p align="center">
+	<img src="https://user-images.githubusercontent.com/123456789/partner-logo.png" alt="AlpesPartner Logo" width="180"/>
+</p>
 
-## Infraestructura incluida
+<p align="center">
+	<b>Microservicios | Eventos | Sagas | Docker | Pulsar | MySQL</b>
+</p>
 
-### 🚀 Apache Pulsar Stack
-- **Zookeeper**: Coordinación distribuida (puerto interno)
-- **Bookie**: Almacenamiento de logs (puerto interno)  
-- **Broker**: Broker de mensajes (puertos 6650, 8080)
-- **Pulsar-init**: Inicialización del clúster (automático)
+---
 
-### 🗄️ Base de Datos
-- **MySQL 8**: Puerto 3307 (para evitar conflictos con MySQL local)
-- **Usuario**: `alpespartner` / `alpespartner123`
-- **Base de datos**: `alpespartner`
-- **Inicialización**: Automática con esquemas y datos de ejemplo
+AlpesPartner es una plataforma modular para la gestión de campañas, afiliados, comisiones y conversiones, basada en microservicios y comunicación asíncrona con Apache Pulsar. ¡Despliega, explora y prueba todo el flujo de negocio en minutos!
 
-## Uso
+---
 
-### Levantar TODO el sistema (infraestructura + microservicios)
+
+## 🚦 Pasos Rápidos para Empezar
+
+<ol>
+	<li><b>Instala Docker y Docker Compose</b></li>
+	<li><b>Clona el repositorio y navega al proyecto</b></li>
+	<li><b>Levanta toda la infraestructura y microservicios</b></li>
+	<li><b>Accede a la documentación interactiva de APIs</b></li>
+	<li><b>Prueba los endpoints con Postman o curl</b></li>
+	<li><b>Verifica los eventos y la persistencia</b></li>
+</ol>
+
+---
+
+docker-compose -f docker-compose-alpespartner.yml --profile alpespartner up --build
+docker-compose -f docker-compose-alpespartner.yml ps
+
+## 🚀 Despliegue Completo
+
+<details>
+<summary><b>Desplegar todo el sistema (infraestructura + microservicios)</b></summary>
+
 ```bash
 docker-compose -f docker-compose-alpespartner.yml --profile alpespartner up --build
 ```
+</details>
 
-### Levantar solo infraestructura
+<details>
+<summary><b>Verificar servicios activos</b></summary>
+
 ```bash
-docker-compose -f docker-compose-alpespartner.yml --profile infrastructure up -d
+docker-compose -f docker-compose-alpespartner.yml ps
+```
+</details>
+
+---
+
+
+## 📚 Documentación Interactiva
+
+Accede a la documentación Swagger de cada microservicio en `/docs`:
+
+| Servicio        | URL                              |
+|-----------------|----------------------------------|
+| BFF             | http://localhost:8001/docs       |
+| Campañas        | http://localhost:8002/docs       |
+| Afiliados       | http://localhost:8003/docs       |
+| Comisiones      | http://localhost:8004/docs       |
+| Conversiones    | http://localhost:8005/docs       |
+| Notificaciones  | http://localhost:8006/docs       |
+| Sagas           | http://localhost:8007/docs       |
+
+---
+
+
+## 🧪 Pruebas End-to-End: BFF y Sagas de Campañas
+
+### 1. Probar el BFF
+
+<details>
+<summary><b>Crear una campaña desde el BFF (curl)</b></summary>
+
+```bash
+curl -X POST http://localhost:8001/campanias \
+	-H "Content-Type: application/json" \
+	-d '{
+		"nombre": "Campaña Demo",
+		"descripcion": "Prueba end-to-end",
+		"fecha_inicio": "2025-09-22",
+		"fecha_fin": "2025-09-30",
+		"presupuesto": 10000,
+		"comision_porcentaje": 0.10
+	}'
 ```
 
-### Levantar servicios específicos
+<b>Respuesta esperada:</b>
+```json
+{
+	"correlation_id": "bff-uuid-generado",
+	"status": "procesando"
+}
+```
+</details>
+
+### 2. Probar Sagas de Campañas
+
+<details>
+<summary><b>Lanzar una saga de campaña (curl)</b></summary>
+
 ```bash
-# Solo BFF y campanias (requiere infraestructura)
-docker-compose -f docker-compose-alpespartner.yml --profile infrastructure --profile bff --profile campanias up --build
-
-# Solo Pulsar
-docker-compose -f docker-compose-alpespartner.yml --profile pulsar up -d
-
-# Solo Base de datos
-docker-compose -f docker-compose-alpespartner.yml --profile database up -d
+curl -X POST http://localhost:8007/sagas/campanias \
+	-H "Content-Type: application/json" \
+	-d '{
+		"nombre": "Campaña Saga",
+		"descripcion": "Saga de prueba",
+		"fecha_inicio": "2025-09-22",
+		"fecha_fin": "2025-09-30",
+		"presupuesto": 20000,
+		"comision_porcentaje": 0.15
+	}'
 ```
 
-### Reconstruir servicios
+<b>Respuesta esperada:</b>
+```json
+{
+	"saga_id": "saga-uuid-generado",
+	"estado": "iniciada",
+	"mensaje": "Saga lanzada correctamente"
+}
+```
+</details>
+
+### 3. Usar Colecciones Postman
+
+Importa los archivos de la carpeta <b>collections/</b> en Postman para probar todos los endpoints de BFF y Campañas, incluyendo flujos de saga y verificación de eventos.
+
+---
+
+### 4. Verificar eventos y persistencia
+
+<details>
+<summary><b>Ver eventos en Pulsar</b></summary>
+
 ```bash
+# Eventos de campañas
+docker exec -it <pulsar-container-name> bin/pulsar-client consume \
+	"persistent://public/default/eventos-campania" -s "test-sub" -p Earliest -n 10
+
+# Eventos de comisiones
+docker exec -it <pulsar-container-name> bin/pulsar-client consume \
+	"persistent://public/default/eventos-comision" -s "test-sub" -p Earliest -n 10
+```
+</details>
+
+<details>
+<summary><b>Verificar persistencia en MySQL</b></summary>
+
+```bash
+docker exec -it <mysql-container-name> mysql -u alpespartner -palpespartner123 -D alpespartner \
+	-e "SELECT * FROM campanias ORDER BY creada_en DESC LIMIT 5;"
+```
+</details>
+
+---
+
+
+## 🌈 Experiencia de Usuario
+
+<p align="center">
+	<img src="https://user-images.githubusercontent.com/123456789/flow-diagram.png" alt="Flujo de Campañas" width="600"/>
+</p>
+
+Sigue los pasos de la guía y explora la documentación interactiva para entender el flujo completo:
+
+1. Despliega el sistema
+2. Prueba la creación de campañas y sagas
+3. Verifica los eventos y la persistencia
+4. Explora los endpoints y la arquitectura
+
+---
+
+docker-compose -f docker-compose-alpespartner.yml logs -f
+docker-compose -f docker-compose-alpespartner.yml logs -f bff
+docker-compose -f docker-compose-alpespartner.yml logs -f campanias
+
+## 📝 Logs y Debug
+
+```bash
+# Ver logs de todos los servicios
+docker-compose -f docker-compose-alpespartner.yml logs -f
+
+# Ver logs de un servicio específico
+docker-compose -f docker-compose-alpespartner.yml logs -f bff
+docker-compose -f docker-compose-alpespartner.yml logs -f campanias
+```
+
+---
+
+
+## 🛠️ Troubleshooting Rápido
+
+- **MySQL no conecta**: Verifica con `docker-compose ps` y revisa los logs.
+- **Pulsar no disponible**: Revisa el estado del broker y los logs.
+- **Puerto ocupado**: Usa `lsof -i :<puerto>` y libera el puerto si es necesario.
+- **Volúmenes corruptos**: `docker-compose down -v` y `docker volume prune` (borra datos).
+- **Servicios no se comunican**: Verifica redes con `docker network ls` y `docker network inspect`.
+
+---
+
+docker-compose -f docker-compose-alpespartner.yml down
 docker-compose -f docker-compose-alpespartner.yml build --no-cache
+docker exec -it <container-name> bash
+
+## ⚡ Comandos Útiles
+
+```bash
+# Parar todo
+docker-compose -f docker-compose-alpespartner.yml down
+
+# Reconstruir servicios
+docker-compose -f docker-compose-alpespartner.yml build --no-cache
+
+# Entrar a un contenedor
+docker exec -it <container-name> bash
 ```
 
-## Puertos y Servicios
+---
 
-### 🌐 Infraestructura
-- **Pulsar Broker**: http://localhost:8080 (Admin UI), pulsar://localhost:6650 (Cliente)
-- **MySQL**: localhost:3307 (usuario: `alpespartner`, password: `alpespartner123`)
+
+## 🗂️ Estructura de Carpetas Clave
+
+- `src-alpespartner/` - Código fuente de todos los microservicios
+- `collections/` - Colecciones Postman para pruebas automáticas
+- `README-alpespartner.md` - Esta guía
+- `docker-compose-alpespartner.yml` - Infraestructura y servicios
+
+---
+
+
+## 📖 Recursos y Documentación
+
+- Documentación técnica y de arquitectura: revisa los archivos `docs/`, `README.md`, y los endpoints `/docs` de cada servicio.
+
+---
+
+<p align="center">
+	<b>¡Listo! Despliega, prueba y explora AlpesPartner con esta guía. Si tienes dudas, revisa la documentación o los endpoints interactivos.</b>
+</p>
+
+**¡Listo! Con estos pasos puedes desplegar, probar y entender el flujo completo de AlpesPartner, desde la creación de campañas hasta la orquestación de sagas y la verificación de eventos y persistencia.**
 
 ### 🏗️ Microservicios AlpesPartner
 - **BFF**: http://localhost:8001 - API Gateway y orquestador

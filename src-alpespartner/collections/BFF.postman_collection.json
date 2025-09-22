@@ -1,0 +1,43 @@
+{
+  "info": {
+    "name": "BFF API",
+    "description": "Colección profesional para probar los endpoints del Backend For Frontend (BFF) del sistema de campañas.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Lanzar campaña completa",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"nombre\": \"Campaña de prueba\",\n  \"descripcion\": \"Campaña generada para pruebas de saga\",\n  \"tipo\": \"DESCUENTO\",\n  \"fecha_inicio\": \"2025-09-19T00:00:00Z\",\n  \"fecha_fin\": \"2025-09-30T23:59:59Z\",\n  \"presupuesto\": 10000,\n  \"buscar_afiliados_automatico\": true,\n  \"configurar_comisiones\": true,\n  \"activar_automaticamente\": false,\n  \"enviar_notificaciones\": true\n}"
+        },
+        "url": {
+          "raw": "http://localhost:8001/bff/campanias/lanzar-completa",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8001",
+          "path": ["bff", "campanias", "lanzar-completa"]
+        }
+      }
+    },
+    {
+      "name": "Consultar estado completo de campaña",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:8001/bff/campanias/{{campania_id}}/estado-completo",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8001",
+          "path": ["bff", "campanias", "{{campania_id}}", "estado-completo"]
+        }
+      }
+    }
+  ]
+}
