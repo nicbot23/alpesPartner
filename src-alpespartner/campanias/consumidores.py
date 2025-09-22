@@ -60,124 +60,154 @@ class SagaEventConsumer:
 	def __init__(self, saga_logger: Optional[SagaLogger] = None):
 		self.saga_logger = saga_logger or SagaLogger()
 	
-
-
-	def listen(self, event)-> None:
+	def listen(self, event) -> None:
 		"""
-		Main entrypoint for event consumption. Receives an EventoSagaCampania and processes it.
+		Recibe un JSON publicado por Afiliados en 'eventos-saga-campania':
+		{
+			"saga_id": "...",
+			"paso": "solicitar_afiliados_elegibles",
+			"estado": "OK" | "FALLIDO",
+			"detalle": {...}
+		}
 		"""
-		saga_id = None
-		paso = None
-		estado = None
-		detalle = None
-
-		try:
-			if getattr(event, "saga_completada", None):
-				saga_id = event.saga_completada.saga_id
-				estado = EstadoSaga.COMPLETADA
-			elif getattr(event, "saga_fallida", None):
-				saga_id = event.saga_fallida.saga_id
-				paso = event.saga_fallida.paso_fallido or "desconocido"
-				estado = EstadoPaso.FALLIDO
-				detalle = {"error": getattr(event.saga_fallida, "motivo", "Fallo en saga")}
-		except Exception:
-			pass
-
-# 2) Estilo plano (fallback)
-		if not saga_id:
-			saga_id = getattr(event, "saga_id", None)
-			paso = paso or getattr(event, "paso", None)
-			estado = estado or getattr(event, "estado", None)
-			detalle = detalle or getattr(event, "detalle", None)
+		saga_id = event.get("saga_id")
+		paso    = event.get("paso")
+		estado  = event.get("estado")
+		detalle = event.get("detalle")
 
 		if not saga_id:
 			logging.warning(f"Evento inválido (sin saga_id): {event}")
 			return
 
 		try:
-			if estado == EstadoSaga.COMPLETADA:
-				self.saga_logger.marcar_completada(saga_id)
-				logging.info(f"Saga {saga_id} COMPLETADA")
+			# Si Afiliados falla => marca paso FALLIDO y compensa/ciérralo como FALLIDA o COMPENSADA (según tu política)
+			if str(estado).upper() in ("FALLIDO", "FAIL", "ERROR"):
+				try:
+					# si tu logger tiene esta firma, úsala; si no, quita la línea
+					self.saga_logger.registrar_paso(
+						saga_id=saga_id,
+						paso_numero=1,
+						nombre_paso=paso or "solicitar_afiliados_elegibles",
+						servicio="afiliados",
+						comando="comando-buscar-afiliados-elegibles",
+						estado="FALLIDO",
+						response_data=None,
+						error_mensaje=(detalle or {}).get("motivo") if isinstance(detalle, dict) else str(detalle),
+					)
+				except Exception:
+					pass
+				self.saga_logger.actualizar_estado_saga(
+					saga_id, "FALLIDA", error="Fallo en Afiliados"
+				)
+				logging.info(f"Saga {saga_id} marcada FALLIDA por Afiliados")
 				return
 
-			if estado in (EstadoPaso.FALLIDO, "FALLIDO") or (isinstance(estado, str) and "FALL" in estado.upper()):
-				# marca paso como fallido y compensa saga
-				if paso:
-					self.saga_logger.actualizar_estado_paso(saga_id, paso, EstadoPaso.FALLIDO, detalle)
-				self.saga_logger.compensar_saga(saga_id, paso_id=paso, razon="Fallo en paso")
-				logging.info(f"Saga {saga_id} COMPENSADA (fallo en paso {paso})")
+			# Si Afiliados OK => cierra la saga (como en este escenario sólo hay este paso)
+			if str(estado).upper() in ("OK", "COMPLETADO", "COMPLETADA"):
+				try:
+					self.saga_logger.registrar_paso(
+						saga_id=saga_id,
+						paso_numero=1,
+						nombre_paso=paso or "solicitar_afiliados_elegibles",
+						servicio="afiliados",
+						comando="comando-buscar-afiliados-elegibles",
+						estado="OK",
+						response_data=detalle if isinstance(detalle, dict) else None,
+					)
+				except Exception:
+					pass
+				self.saga_logger.actualizar_estado_saga(
+					saga_id, "COMPLETADA", resultado={"afiliados": detalle}
+				)
+				logging.info(f"Saga {saga_id} COMPLETADA por respuesta de Afiliados")
 				return
 
-			# si llega un evento de progreso normal
-			if paso and estado:
-				self.saga_logger.actualizar_estado_paso(saga_id, paso, estado, detalle)
-				# si con este evento queda completa, márcalo explícitamente
-				if self.saga_logger.saga_completada(saga_id):
-					self.saga_logger.marcar_completada(saga_id)
-					logging.info(f"Saga {saga_id} COMPLETADA")
+			# Cualquier otro estado: deja trazabilidad del paso y mantén EN_PROGRESO
+			try:
+				self.saga_logger.registrar_paso(
+					saga_id=saga_id,
+					paso_numero=1,
+					nombre_paso=paso or "solicitar_afiliados_elegibles",
+					servicio="afiliados",
+					comando="comando-buscar-afiliados-elegibles",
+					estado=str(estado).upper() if estado else "PENDIENTE",
+					response_data=detalle if isinstance(detalle, dict) else None,
+				)
+			except Exception:
+				pass
+			self.saga_logger.actualizar_estado_saga(saga_id, "EN_PROGRESO")
 		except Exception as e:
 			logging.error(f"Error procesando evento de saga: {e}")
 			traceback.print_exc()
 
-		# Detect event type and extract info
-		# if event.saga_completada:
-		# 	saga_id = event.saga_completada.saga_id
-		# 	estado = 'COMPLETADA'
-		# elif event.saga_fallida:
-		# 	saga_id = event.saga_fallida.saga_id
-		# 	estado = 'FALLIDA'
-		# 	paso = event.saga_fallida.paso_fallido
-		# else:
-		# 	print(f"Evento no reconocido: {event}")
-		# 	return
-		# self.handle_event(saga_id, paso, estado)
 
-# 	def handle_event(self, saga_id, paso, estado):
+# 	def listen(self, event)-> None:
 # 		"""
-# 		Updates saga status and triggers closure/compensation if needed.
+# 		Main entrypoint for event consumption. Receives an EventoSagaCampania and processes it.
 # 		"""
+# 		saga_id = None
+# 		paso = None
+# 		estado = None
+# 		detalle = None
+
 # 		try:
-# 			if estado == 'COMPLETADA':
-# 				self.saga_logger.marcar_completada(saga_id)
-# 				print(f"Saga {saga_id} COMPLETADA")
-# 			elif estado == 'FALLIDA':
-# 				self.saga_logger.compensar_saga(saga_id, paso_id=paso)
-# 				print(f"Saga {saga_id} COMPENSADA (fallo en paso {paso})")
-# 		except Exception as e:
-# 			print(f"Error procesando evento saga: {e}")
+# 			if getattr(event, "saga_completada", None):
+# 				saga_id = event.saga_completada.saga_id
+# 				estado = EstadoSaga.COMPLETADA
+# 			elif getattr(event, "saga_fallida", None):
+# 				saga_id = event.saga_fallida.saga_id
+# 				paso = event.saga_fallida.paso_fallido or "desconocido"
+# 				estado = EstadoPaso.FALLIDO
+# 				detalle = {"error": getattr(event.saga_fallida, "motivo", "Fallo en saga")}
+# 		except Exception:
+# 			pass
 
-# class SagaEventConsumer:
-# 	"""
-# 	Professional event consumer for campanias.
-# 	Listens for confirmation/failure events and updates saga status using saga_logger_v2.
-# 	"""
-# 	def __init__(self, saga_logger=None):
-# 		self.saga_logger = saga_logger or SagaLogger()
+# # 2) Estilo plano (fallback)
+# 		if not saga_id:
+# 			saga_id = getattr(event, "saga_id", None)
+# 			paso = paso or getattr(event, "paso", None)
+# 			estado = estado or getattr(event, "estado", None)
+# 			detalle = detalle or getattr(event, "detalle", None)
 
-# 	def listen(self, event):
-# 		"""
-# 		Main entrypoint for event consumption. Receives an event and processes it.
-# 		"""
-# 		saga_id = getattr(event, 'saga_id', None)
-# 		paso = getattr(event, 'paso', None)
-# 		estado = getattr(event, 'estado', None)
-# 		if not saga_id or not paso or not estado:
-# 			print(f"Evento inválido: {event}")
+# 		if not saga_id:
+# 			logging.warning(f"Evento inválido (sin saga_id): {event}")
 # 			return
-# 		self.handle_event(saga_id, paso, estado)
 
-# 	def handle_event(self, saga_id, paso, estado):
-# 		"""
-# 		Updates saga step status and triggers closure/compensation if needed.
-# 		"""
 # 		try:
-# 			self.saga_logger.actualizar_estado_paso(saga_id, paso, estado)
-# 			if self.saga_logger.saga_completada(saga_id):
+# 			if estado == EstadoSaga.COMPLETADA:
 # 				self.saga_logger.marcar_completada(saga_id)
-# 				print(f"Saga {saga_id} COMPLETADA")
-# 			elif estado == 'FALLIDO' or "FALL" in estado:
-# 				self.saga_logger.compensar_saga(saga_id)
-# 				print(f"Saga {saga_id} COMPENSADA")
+# 				logging.info(f"Saga {saga_id} COMPLETADA")
+# 				return
+
+# 			if estado in (EstadoPaso.FALLIDO, "FALLIDO") or (isinstance(estado, str) and "FALL" in estado.upper()):
+# 				# marca paso como fallido y compensa saga
+# 				if paso:
+# 					self.saga_logger.actualizar_estado_paso(saga_id, paso, EstadoPaso.FALLIDO, detalle)
+# 				self.saga_logger.compensar_saga(saga_id, paso_id=paso, razon="Fallo en paso")
+# 				logging.info(f"Saga {saga_id} COMPENSADA (fallo en paso {paso})")
+# 				return
+
+# 			# si llega un evento de progreso normal
+# 			if paso and estado:
+# 				self.saga_logger.actualizar_estado_paso(saga_id, paso, estado, detalle)
+# 				# si con este evento queda completa, márcalo explícitamente
+# 				if self.saga_logger.saga_completada(saga_id):
+# 					self.saga_logger.marcar_completada(saga_id)
+# 					logging.info(f"Saga {saga_id} COMPLETADA")
 # 		except Exception as e:
-# 			print(f"Error procesando evento saga: {e}")
+# 			logging.error(f"Error procesando evento de saga: {e}")
+# 			traceback.print_exc()
+
+# 		# Detect event type and extract info
+# 		# if event.saga_completada:
+# 		# 	saga_id = event.saga_completada.saga_id
+# 		# 	estado = 'COMPLETADA'
+# 		# elif event.saga_fallida:
+# 		# 	saga_id = event.saga_fallida.saga_id
+# 		# 	estado = 'FALLIDA'
+# 		# 	paso = event.saga_fallida.paso_fallido
+# 		# else:
+# 		# 	print(f"Evento no reconocido: {event}")
+# 		# 	return
+# 		# self.handle_event(saga_id, paso, estado)
 

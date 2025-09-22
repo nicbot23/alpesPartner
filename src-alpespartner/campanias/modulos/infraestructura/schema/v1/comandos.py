@@ -1,6 +1,7 @@
 from pulsar.schema import *
 from campanias.seedwork.infraestructura.schema.v1.mensajes import Mensaje
 from campanias.seedwork.infraestructura.utils import time_millis
+from pulsar.schema import Record, String, Long, Map
 import uuid
 
 class CrearCampaniaPayload(Record):
@@ -104,3 +105,26 @@ class ComandoCancelarSaga(Mensaje):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+
+class BuscarAfiliadosElegiblesPayload(Record):
+    campania_id = String()
+    campania_nombre = String()
+    tipo_campania = String()
+    canal_publicidad = String()
+    objetivo_campania = String()
+    segmento_audiencia = String()
+    # OJO: en el schema registrado eran STRING, no long
+    fecha_inicio = String()
+    fecha_fin = String()
+    criterios_elegibilidad = Map(String())
+
+class ComandoBuscarAfiliadosElegibles(Record):
+    # Envelope CloudEvents-like que mostró el broker
+    id = String()
+    time = Long()
+    ingestion = Long()
+    specversion = String()
+    type = String()
+    datacontenttype = String()
+    service_name = String()
+    data = BuscarAfiliadosElegiblesPayload()

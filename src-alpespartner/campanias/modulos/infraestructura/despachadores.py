@@ -1,64 +1,94 @@
-# afiliados/despachadores.py
-import json
-import logging
-from typing import Any, Dict
-
 import pulsar
-from pulsar.schema import Record, AvroSchema
+import logging
+from pulsar.schema import AvroSchema
+from typing import Any, Optional
 
-log = logging.getLogger(__name__)
+from campanias.seedwork.infraestructura import utils
 
+from campanias.modulos.infraestructura.schema.v1.comandos import (
+    ComandoBuscarAfiliadosElegibles,
+    BuscarAfiliadosElegiblesPayload,
+)
 
-class DespachadorAfiliados:
-    """
-    Productor Pulsar alineado al patrón de Campañas:
-      - publica Avro si recibe un Record
-      - si recibe dict -> publica JSON
-    """
-    def __init__(self, pulsar_url: str):
-        self.pulsar_url = pulsar_url
-        self.topico_eventos_saga = "eventos-saga-campania"
+logger = logging.getLogger(__name__)
 
-    # ----- util interna -----
-    def _send_avro(self, cliente: pulsar.Client, topico: str, mensaje: Record):
-        productor = cliente.create_producer(topico, schema=AvroSchema(mensaje.__class__))
-        productor.send(mensaje)
+class Despachador:
+    def __init__(self):
+        self.cliente: Optional[pulsar.Client] = None
+        self._productores = {}
+    
+    def _obtener_cliente(self):
+        if self.cliente is None:
+            try:
+                self.cliente = pulsar.Client(
+                    f'pulsar://{utils.broker_host()}:6650',
+                    operation_timeout_seconds=30,
+                    connection_timeout_seconds=10
+                )
+                logger.info("Cliente Pulsar conectado exitosamente")
+            except Exception as e:
+                logger.error(f"Error conectando a Pulsar: {e}")
+                raise
+        return self.cliente
+    
+    def _obtener_productor(self, topico: str, schema_class):
+        key = f"{topico}_{schema_class.__name__}"
+        if key not in self._productores:
+            try:
+                cliente = self._obtener_cliente()
+                self._productores[key] = cliente.create_producer(
+                    topico,
+                    schema=AvroSchema(schema_class),
+                    send_timeout_millis=10000,
+                    batching_enabled=True,
+                    batching_max_messages=100,
+                    batching_max_publish_delay_millis=1000
+                )
+                logger.info(f"Productor creado para tópico: {topico}")
+            except Exception as e:
+                logger.error(f"Error creando productor para {topico}: {e}")
+                raise
+        return self._productores[key]
 
-    def _send_json(self, cliente: pulsar.Client, topico: str, payload: Dict[str, Any]):
-        productor = cliente.create_producer(topico)  # sin schema
-        productor.send(json.dumps(payload).encode("utf-8"))
-
-    def publicar_mensaje(self, mensaje: Any, topico: str):
-        cliente = None
+    async def publicar_mensaje(self, mensaje: Any, topico: str):
         try:
-            cliente = pulsar.Client(self.pulsar_url)
-            if isinstance(mensaje, Record):
-                self._send_avro(cliente, topico, mensaje)
-            elif isinstance(mensaje, dict):
-                self._send_json(cliente, topico, mensaje)
-            else:
-                # Fallback prudente
-                self._send_json(cliente, topico, {"payload": str(mensaje)})
-            log.info("📤 Publicado en %s", topico)
-        finally:
-            if cliente:
-                cliente.close()
+            productor = self._obtener_productor(topico, mensaje.__class__)
+            # Usar send_async para operaciones no bloqueantes
+            future = productor.send_async(mensaje)
+            # Opcionalmente esperar confirmación
+            # message_id = await future
+            logger.debug(f"Mensaje enviado a {topico}: {type(mensaje).__name__}")
+        except Exception as e:
+            logger.error(f"Error publicando mensaje en {topico}: {e}")
+            raise
 
-    # ----- API de eventos de SAGA (JSON simple por compatibilidad) -----
-    async def publicar_evento_saga_ok(self, saga_id: str, paso: str, detalle: Dict[str, Any]):
-        evento = {
-            "saga_id": saga_id,
-            "paso": paso,
-            "estado": "OK",
-            "detalle": detalle,
-        }
-        self.publicar_mensaje(evento, self.topico_eventos_saga)
+    async def publicar_evento(self, evento: Any, topico: str):
+        logger.info(f"Publicando evento {type(evento).__name__} en {topico}")
+        await self.publicar_mensaje(evento, topico)
+    
+    async def publicar_comando(self, comando: Any, topico: str):
+        logger.info(f"Publicando comando {type(comando).__name__} en {topico}")
+        await self.publicar_mensaje(comando, topico)
 
-    async def publicar_evento_saga_fallido(self, saga_id: str, paso: str, motivo: str, detalle: Dict[str, Any] | None = None):
-        evento = {
-            "saga_id": saga_id,
-            "paso": paso,
-            "estado": "FALLIDO",
-            "detalle": {"motivo": motivo, **(detalle or {})},
-        }
-        self.publicar_mensaje(evento, self.topico_eventos_saga)
+    async def publicar_query(self, query: Any, topico: str):
+        logger.info(f"Publicando query {type(query).__name__} en {topico}")
+        await self.publicar_mensaje(query, topico)
+    
+    def cerrar(self):
+        """Cierra todas las conexiones de manera limpia"""
+        try:
+            for productor in self._productores.values():
+                productor.close()
+            if self.cliente:
+                self.cliente.close()
+            logger.info("Despachador cerrado correctamente")
+        except Exception as e:
+            logger.error(f"Error cerrando despachador: {e}")
+    
+    def __enter__(self):
+        return self
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.cerrar()
+    
+    

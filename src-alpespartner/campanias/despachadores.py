@@ -7,6 +7,10 @@ from pulsar.schema import AvroSchema, Record
 
 from campanias.seedwork.infraestructura import utils
 from campanias.sagas.saga_logger_v2 import SagaLoggerV2, EstadoSaga
+from campanias.modulos.infraestructura.schema.v1.comandos import (
+    ComandoBuscarAfiliadosElegibles,
+    BuscarAfiliadosElegiblesPayload,
+)
 
 class Despachador:
     """
@@ -19,33 +23,29 @@ class Despachador:
         self.saga_logger = SagaLoggerV2(storage_type=storage_type)
         print(f"🎭 Despachador inicializado con SagaLogger {storage_type.upper()}")
 
+
     # --------- Publicación ----------
     def _send_avro(self, cliente: pulsar.Client, topico: str, mensaje: Record):
         productor = cliente.create_producer(topico, schema=AvroSchema(mensaje.__class__))
         productor.send(mensaje)
 
     def _send_json(self, cliente: pulsar.Client, topico: str, payload: Dict[str, Any]):
-        productor = cliente.create_producer(topico)  # sin schema
+        productor = cliente.create_producer(topico)
         productor.send(json.dumps(payload).encode("utf-8"))
 
     def publicar_mensaje(self, mensaje, topico: str):
-        """
-        Publica un objeto Avro Record; si viene un dict, lo envía como JSON (fallback seguro).
-        """
         cliente = None
         try:
-            print(f"📤 Publicando {type(mensaje).__name__} en tópico: {topico}")
             cliente = pulsar.Client(self.broker_url)
             if isinstance(mensaje, Record):
                 self._send_avro(cliente, topico, mensaje)
             elif isinstance(mensaje, dict):
                 self._send_json(cliente, topico, mensaje)
             else:
-                # Intento prudente: si tiene __class__ Avro, usamos Avro; si no, JSON
                 try:
-                    self._send_avro(cliente, topico, mensaje)  # puede fallar si no es Record
+                    self._send_avro(cliente, topico, mensaje)
                 except Exception:
-                    self._send_json(cliente, topico, mensaje if isinstance(mensaje, dict) else {"payload": str(mensaje)})
+                    self._send_json(cliente, topico, {"payload": str(mensaje)})
             print(f"✅ Evento publicado en {topico}")
         except Exception as e:
             logging.error(f"Error publicando en {topico}: {e}")
@@ -71,14 +71,15 @@ class Despachador:
 
             # Paso 1: Afiliados
             self.solicitar_afiliados_elegibles(datos_campania, saga_id)
-            # Paso 2: Comisiones
-            self.configurar_comisiones_campania(datos_campania, saga_id)
-            # Paso 3: Conversiones
-            self.inicializar_tracking_conversiones(datos_campania, saga_id)
-            # Paso 4: Notificaciones
-            self.preparar_notificaciones_campania(datos_campania, saga_id)
+            # if not self.solo_afiliados:
+            #     # Paso 2: Comisiones
+            #     self.configurar_comisiones(datos_campania, saga_id)   # o configurar_comisiones_campania si usas la Opción B
+            #     # Paso 3: Conversiones
+            #     self.inicializar_tracking_conversiones(datos_campania, saga_id)
+            #     # Paso 4: Notificaciones
+            #     self.preparar_notificaciones_campania(datos_campania, saga_id)
 
-            self.saga_logger.actualizar_estado_saga(saga_id, EstadoSaga.EN_PROGRESO, "Comandos enviados")
+            self.saga_logger.actualizar_estado_saga(saga_id, EstadoSaga.EN_PROGRESO, "Comando de afiliados enviado")
             print(f"✅ SAGA {saga_id} en progreso")
             return saga_id
         except Exception as e:
@@ -87,7 +88,9 @@ class Despachador:
             self.compensar_saga_campania(datos_campania, saga_id)
             raise
 
+
     def solicitar_afiliados_elegibles(self, datos_campania: Dict[str, Any], saga_id: str):
+        paso_id = None
         try:
             paso_id = self.saga_logger.registrar_paso_saga(
                 saga_id=saga_id,
@@ -96,63 +99,57 @@ class Despachador:
                 topico_pulsar="comando-buscar-afiliados-elegibles",
                 datos_entrada={
                     "campania_id": datos_campania["id"],
-                    "criterios": datos_campania.get("segmento_audiencia", "general")
-                }
+                    "criterios": datos_campania.get("segmento_audiencia", "general"),
+                },
             )
-            from campanias.comandos import ComandoBuscarAfiliadosElegibles
-            comando = ComandoBuscarAfiliadosElegibles(
+
+            # ==== Construcción EXACTA del envelope que exige el tópico ====
+            payload = BuscarAfiliadosElegiblesPayload(
                 campania_id=datos_campania["id"],
                 campania_nombre=datos_campania["nombre"],
                 tipo_campania=datos_campania["tipo"],
                 canal_publicidad=datos_campania["canal_publicidad"],
                 objetivo_campania=datos_campania["objetivo"],
                 segmento_audiencia=datos_campania.get("segmento_audiencia", "general"),
-                fecha_inicio=datos_campania["fecha_inicio"],
-                fecha_fin=datos_campania["fecha_fin"],
+                # En el schema actual son STRING. Convertimos epoch→ISO o a string simple.
+                fecha_inicio=str(datos_campania["fecha_inicio"]),
+                fecha_fin=str(datos_campania["fecha_fin"]),
                 criterios_elegibilidad={
-                    "segmento_requerido": datos_campania.get("segmento_audiencia"),
+                    "segmento_requerido": datos_campania.get("segmento_audiencia", "general"),
                     "canal_compatible": datos_campania["canal_publicidad"],
-                    "nivel_minimo": "basico"
-                }
-            )
-            self.publicar_mensaje(comando, "comando-buscar-afiliados-elegibles")
-            self.saga_logger.actualizar_estado_paso_por_id(paso_id, "enviado")
-        except Exception as e:
-            self.saga_logger.actualizar_estado_paso_por_id(paso_id, "fallido", str(e))
-            raise
-
-    def configurar_comisiones_campania(self, datos_campania: Dict[str, Any], saga_id: str):
-        try:
-            paso_id = self.saga_logger.registrar_paso_saga(
-                saga_id=saga_id,
-                nombre_paso="configurar_comisiones_campania",
-                servicio_destino="comisiones",
-                topico_pulsar="comando-configurar-comision-campania",
-                datos_entrada={
-                    "campania_id": datos_campania["id"],
-                    "presupuesto": datos_campania.get("presupuesto", 0.0)
-                }
-            )
-            from campanias.comandos import ComandoConfigurarComisionCampania
-            comando = ComandoConfigurarComisionCampania(
-                campania_id=datos_campania["id"],
-                campania_nombre=datos_campania["nombre"],
-                tipo_campania=datos_campania["tipo"],
-                presupuesto_total=datos_campania.get("presupuesto", 0.0),
-                moneda=datos_campania.get("moneda", "USD"),
-                estructura_comisiones={
-                    "porcentaje_base": self._calcular_comision_base(datos_campania["tipo"]),
-                    "bonificacion_volumen": True,
-                    "limite_maximo": datos_campania.get("presupuesto", 0.0) * 0.3,
-                    "frecuencia_pago": "mensual"
+                    "nivel_minimo": "basico",
                 },
-                fecha_inicio=datos_campania["fecha_inicio"],
-                fecha_fin=datos_campania["fecha_fin"]
             )
-            self.publicar_mensaje(comando, "comando-configurar-comision-campania")
+
+            env = ComandoBuscarAfiliadosElegibles(
+                id=saga_id,
+                time=int(__import__("time").time() * 1000),
+                ingestion=int(__import__("time").time() * 1000),
+                specversion="1.0",
+                type="comando.buscar_afiliados_elegibles",
+                datacontenttype="application/avro",
+                service_name="campanias",
+                data=payload,
+            )
+            # ===============================================================
+
+            # Publicar con AvroSchema de la clase envelope
+            import pulsar
+            cliente = pulsar.Client(self.broker_url)
+            try:
+                prod = cliente.create_producer(
+                    "comando-buscar-afiliados-elegibles",
+                    schema=AvroSchema(ComandoBuscarAfiliadosElegibles),
+                )
+                prod.send(env)
+            finally:
+                cliente.close()
+
             self.saga_logger.actualizar_estado_paso_por_id(paso_id, "enviado")
+
         except Exception as e:
-            self.saga_logger.actualizar_estado_paso_por_id(paso_id, "fallido", str(e))
+            if paso_id:
+                self.saga_logger.actualizar_estado_paso_por_id(paso_id, "fallido", str(e))
             raise
 
     def inicializar_tracking_conversiones(self, datos_campania: Dict[str, Any], saga_id: str):
@@ -272,8 +269,6 @@ class Despachador:
         tipo = datos_campania.get("tipo", "promocional")
         costo_por_conversion = {"promocional": 25, "descuento": 15, "cashback": 30}
         return int(presupuesto / costo_por_conversion.get(tipo, 25))
-
-
 
 
 
