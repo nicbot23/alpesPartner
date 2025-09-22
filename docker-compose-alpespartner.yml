@@ -310,6 +310,7 @@ services:
     environment:
       - PULSAR_HOST=broker
       - CAMPANIAS_URL=http://campanias:8000
+      - SAGAS_URL=http://sagas:8000
       - AFILIADOS_URL=http://afiliados:8000
       - COMISIONES_URL=http://comisiones:8000
       - CONVERSIONES_URL=http://conversiones:8000

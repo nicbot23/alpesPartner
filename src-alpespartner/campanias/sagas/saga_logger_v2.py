@@ -17,6 +17,20 @@ logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
 # BD de SAGAS (contenerizada)
 DEFAULT_URL = "mysql+pymysql://root:adminadmin@sagas-mysql:3306/sagas?charset=utf8mb4"
 
+def _norm_estado_interno(v: str) -> str:
+    # mismo mapping que en el consumidor, pero mínimo
+    if not v:
+        return "fallido"
+    vup = v.upper()
+    if vup in ("OK", "EXITO", "SUCCESS"):
+        return "completado"
+    if vup in ("FALLIDO", "FAIL", "ERROR"):
+        return "fallido"
+    vlow = v.lower()
+    if vlow in {"enviado", "ejecutando", "completado", "fallido", "compensando", "compensada"}:
+        return vlow
+    return "fallido"
+
 class EstadoSaga:
     PENDIENTE   = "PENDIENTE"
     INICIADA    = "INICIADA"
@@ -309,6 +323,7 @@ class SagaLoggerV2:
         if not (self.tiene_pasos and self.c_pasos["id"] and self.c_pasos["estado"]):
             return
         st = self._map_estado_paso(nuevo_estado)
+        st = _norm_estado_interno(st)
         ups: Dict[str, Any] = { self.c_pasos["estado"]: st }
         if isinstance(detalle, dict) and self.c_pasos["res"]:
             ups[self.c_pasos["res"]] = json.dumps(detalle, ensure_ascii=False)
@@ -324,6 +339,7 @@ class SagaLoggerV2:
         if not self.tiene_pasos or not self.c_pasos["saga_id"] or not self.c_pasos["nombre_paso"] or not self.c_pasos["estado"]:
             return
         st = self._map_estado_paso(estado)
+        st = _norm_estado_interno(st)
 
         # ¿existe?
         sql_sel = f"""

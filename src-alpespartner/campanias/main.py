@@ -8,6 +8,8 @@ from typing import Any
 from campanias.api.v1.campanias import router as campanias_router
 from campanias.api.v1.sagas import router as sagas_router
 
+from campanias.consumidores import suscribirse_a_topico, suscribirse_eventos_saga
+
 # Eventos que consume este microservicio (dominio)
 from campanias.modulos.dominio.eventos import (
     CampaniaCreada, CampaniaActivada, AfiliadoAgregadoACampania, CampaniaEliminada
@@ -137,6 +139,15 @@ async def lifespan(app: FastAPI):
             ComandoAgregarAfiliado
         )
     )
+
+#nuevo
+    task_lanzar_campania = asyncio.create_task(
+        suscribirse_a_topico(
+            topico="comando-lanzar-campania-completa",   # o el que uses
+            suscripcion="campanias-bff-comandos",
+            schema=ComandoLanzarCampaniaCompleta,        # lo que ya tienes
+        )
+    )
     
     # ==========================================
     # SUSCRIPCIONES A COMANDOS DEL BFF (SAGAS)
@@ -199,6 +210,14 @@ async def lifespan(app: FastAPI):
             EventoNotificacion
         )
     )
+
+#NUEVO
+    task_eventos_saga_campania = asyncio.create_task(
+        suscribirse_eventos_saga(
+            topico="eventos-saga-campania",
+            suscripcion="campanias-saga-eventos"
+        )
+    )
     
     # Agregar todas las tareas a la lista global
     tasks.extend([
@@ -213,8 +232,12 @@ async def lifespan(app: FastAPI):
         task_eventos_afiliados,
         task_eventos_comisiones,
         task_eventos_conversiones,
-        task_eventos_notificaciones
+        task_eventos_notificaciones,
+        task_lanzar_campania,
+        task_eventos_saga_campania
     ])
+
+    asyncio.create_task(suscribirse_eventos_saga())
     
     print("✅ Suscripciones a eventos configuradas:")
     print("   - eventos-campania (eventos propios)")

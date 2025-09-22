@@ -5,6 +5,8 @@ import logging
 import traceback
 import pulsar, _pulsar
 import aiopulsar
+import json
+import os
 import asyncio
 from pulsar.schema import *
 from campanias.seedwork.infraestructura import utils
@@ -20,7 +22,37 @@ from campanias.modulos.infraestructura.schema.v1.comandos import (
 from campanias.modulos.aplicacion.handlers import HandlerComandosBFF
 from campanias.eventos import EventoSagaCampania
 from .sagas.saga_logger_v2 import SagaLoggerV2
+log = logging.getLogger(__name__)
 #saga_logger = SagaLogger()
+
+# Mapa de normalización a los estados que tu BD acepta
+ESTADOS_PERMITIDOS = {
+    "OK": "completado",
+    "EXITO": "completado",
+    "EXITO_OK": "completado",
+    "FALLIDO": "fallido",
+    "ERROR": "fallido",
+    "FAIL": "fallido",
+}
+
+def _norm_estado(valor: str) -> str:
+    v = (valor or "").strip()
+    if not v:
+        return "fallido"
+    key = v.upper()
+    if key in ESTADOS_PERMITIDOS:
+        return ESTADOS_PERMITIDOS[key]
+    # fallback razonable
+    if "OK" in key or "EXITO" in key or "SUCCESS" in key:
+        return "completado"
+    if "FAIL" in key or "ERROR" in key or "FALL" in key:
+        return "fallido"
+    # si ya viene en vocabulario interno, respétalo
+    v_lower = v.lower()
+    if v_lower in {"enviado", "ejecutando", "completado", "fallido", "compensando", "compensada"}:
+        return v_lower
+    return "fallido"
+
 
 async def suscribirse_a_topico(topico: str, suscripcion: str, schema: Record, tipo_consumidor:_pulsar.ConsumerType=_pulsar.ConsumerType.Shared):
 	SagaLoggerV2.init_db() 
@@ -52,6 +84,57 @@ async def suscribirse_a_topico(topico: str, suscripcion: str, schema: Record, ti
 						await consumidor.negative_acknowledge(mensaje)
 	except Exception as e:
 		logging.error(f'ERROR: Suscribiendose al tópico de eventos! {e}')
+
+
+async def suscribirse_eventos_saga(
+    topico: str = "eventos-saga-campania",
+    suscripcion: str = "campanias-saga-listener",
+    pulsar_host: str = "broker",
+    tipo_consumidor: _pulsar.ConsumerType = _pulsar.ConsumerType.Shared,
+):
+    url = f"pulsar://{pulsar_host}:6650"
+    logger = SagaLoggerV2(storage_type=os.getenv("SAGAS_STORAGE_TYPE", "sqlite"))
+
+    try:
+        async with aiopulsar.connect(url) as cliente:
+            async with cliente.subscribe(
+                topic=topico,
+                subscription_name=suscripcion,
+                consumer_type=tipo_consumidor
+            ) as consumidor:
+
+                log.info("📥 Campañas escuchando %s", topico)
+
+                while True:
+                    msg = await consumidor.receive()
+                    try:
+                        evt = json.loads(msg.data().decode("utf-8"))
+                        saga_id = evt.get("saga_id")
+                        paso = evt.get("paso")
+                        estado_in = evt.get("estado")
+                        detalle = evt.get("detalle") or {}
+
+                        estado_norm = _norm_estado(estado_in)
+
+                        logger.actualizar_estado_paso(saga_id, paso, estado_norm, detalle)
+
+                        # Si solo usas el paso de Afiliados y quieres cerrar la saga aquí:
+                        if estado_norm == "completado":
+                            logger.actualizar_estado_saga(saga_id, EstadoSaga.COMPLETADA, "Afiliados completado")
+                        elif estado_norm == "fallido":
+                            logger.actualizar_estado_saga(saga_id, EstadoSaga.FALLIDA, "Afiliados fallido")
+
+                        await consumidor.acknowledge(msg)
+
+                    except Exception as e:
+                        log.error("Error procesando evento saga: %s", e)
+                        traceback.print_exc()
+                        await consumidor.negative_acknowledge(msg)
+
+    except Exception as e:
+        log.error("ERROR suscribiéndose a %s: %s", topico, e)
+
+
 
 class SagaEventConsumer:
 	"""
@@ -141,73 +224,4 @@ class SagaEventConsumer:
 			traceback.print_exc()
 
 
-# 	def listen(self, event)-> None:
-# 		"""
-# 		Main entrypoint for event consumption. Receives an EventoSagaCampania and processes it.
-# 		"""
-# 		saga_id = None
-# 		paso = None
-# 		estado = None
-# 		detalle = None
-
-# 		try:
-# 			if getattr(event, "saga_completada", None):
-# 				saga_id = event.saga_completada.saga_id
-# 				estado = EstadoSaga.COMPLETADA
-# 			elif getattr(event, "saga_fallida", None):
-# 				saga_id = event.saga_fallida.saga_id
-# 				paso = event.saga_fallida.paso_fallido or "desconocido"
-# 				estado = EstadoPaso.FALLIDO
-# 				detalle = {"error": getattr(event.saga_fallida, "motivo", "Fallo en saga")}
-# 		except Exception:
-# 			pass
-
-# # 2) Estilo plano (fallback)
-# 		if not saga_id:
-# 			saga_id = getattr(event, "saga_id", None)
-# 			paso = paso or getattr(event, "paso", None)
-# 			estado = estado or getattr(event, "estado", None)
-# 			detalle = detalle or getattr(event, "detalle", None)
-
-# 		if not saga_id:
-# 			logging.warning(f"Evento inválido (sin saga_id): {event}")
-# 			return
-
-# 		try:
-# 			if estado == EstadoSaga.COMPLETADA:
-# 				self.saga_logger.marcar_completada(saga_id)
-# 				logging.info(f"Saga {saga_id} COMPLETADA")
-# 				return
-
-# 			if estado in (EstadoPaso.FALLIDO, "FALLIDO") or (isinstance(estado, str) and "FALL" in estado.upper()):
-# 				# marca paso como fallido y compensa saga
-# 				if paso:
-# 					self.saga_logger.actualizar_estado_paso(saga_id, paso, EstadoPaso.FALLIDO, detalle)
-# 				self.saga_logger.compensar_saga(saga_id, paso_id=paso, razon="Fallo en paso")
-# 				logging.info(f"Saga {saga_id} COMPENSADA (fallo en paso {paso})")
-# 				return
-
-# 			# si llega un evento de progreso normal
-# 			if paso and estado:
-# 				self.saga_logger.actualizar_estado_paso(saga_id, paso, estado, detalle)
-# 				# si con este evento queda completa, márcalo explícitamente
-# 				if self.saga_logger.saga_completada(saga_id):
-# 					self.saga_logger.marcar_completada(saga_id)
-# 					logging.info(f"Saga {saga_id} COMPLETADA")
-# 		except Exception as e:
-# 			logging.error(f"Error procesando evento de saga: {e}")
-# 			traceback.print_exc()
-
-# 		# Detect event type and extract info
-# 		# if event.saga_completada:
-# 		# 	saga_id = event.saga_completada.saga_id
-# 		# 	estado = 'COMPLETADA'
-# 		# elif event.saga_fallida:
-# 		# 	saga_id = event.saga_fallida.saga_id
-# 		# 	estado = 'FALLIDA'
-# 		# 	paso = event.saga_fallida.paso_fallido
-# 		# else:
-# 		# 	print(f"Evento no reconocido: {event}")
-# 		# 	return
-# 		# self.handle_event(saga_id, paso, estado)
 

@@ -15,6 +15,7 @@ class ConfiguracionBFF:
     
     # Microservices URLs
     url_campanias: str = os.getenv("CAMPANIAS_URL", "http://localhost:8001")
+    url_sagas: str = os.getenv("SAGAS_URL", "http://localhost:8002")
     url_afiliados: str = os.getenv("AFILIADOS_URL", "http://localhost:8003")
     url_comisiones: str = os.getenv("COMISIONES_URL", "http://localhost:8004")
     url_conversiones: str = os.getenv("CONVERSIONES_URL", "http://localhost:8005")
