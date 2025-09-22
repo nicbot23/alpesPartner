@@ -1,0 +1,524 @@
+#version: '3.8'
+
+networks:
+  pulsar:
+    driver: bridge
+  alpespartner:
+    driver: bridge
+
+services:
+  # ==========================================
+  # INFRAESTRUCTURA - APACHE PULSAR
+  # ==========================================
+  
+  # Start zookeeper
+  zookeeper:
+    image: apachepulsar/pulsar:latest
+    container_name: alpespartner-zookeeper
+    profiles: ["infrastructure", "pulsar", "alpespartner"]
+    user: "0:0"
+    networks: [pulsar]
+    restart: on-failure
+    volumes:
+      - zk_data:/pulsar/data
+    environment:
+    #   - metadataStoreUrl=zk:zookeeper:2181
+      - PULSAR_MEM=-Xms512m -Xmx512m -XX:MaxDirectMemorySize=256m
+      - PULSAR_LOG_LEVEL=INFO
+    command: >
+      bash -lc "
+        mkdir -p /pulsar/data/zookeeper &&
+        sed -i 's|^dataDir=.*|dataDir=/pulsar/data/zookeeper|' conf/zookeeper.conf &&
+        exec bin/pulsar zookeeper
+      "
+    healthcheck:
+      test: ["CMD","bash","-lc","bin/pulsar zookeeper-shell -server 127.0.0.1:2181 ls / >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+  # Start bookie
+  bookie:
+    image: apachepulsar/pulsar:latest
+    container_name: alpespartner-bookie
+    hostname: bookie
+    profiles: ["infrastructure", "pulsar", "alpespartner"]
+    networks: [pulsar]
+    user: "0:0"
+    restart: on-failure
+    environment:
+      # ZK del cluster
+      - metadataServiceUri=zk+hierarchical://zookeeper:2181/ledgers
+      # Dirección/puerto que anuncia
+      - advertisedAddress=bookie
+      - bookiePort=3181
+      - useHostNameAsBookieID=true
+      - allowLoopback=true
+      # RUTAS **ABSOLUTAS** dentro del volumen
+      - journalDirectories=/pulsar/data/bookkeeper/journal
+      - ledgerDirectories=/pulsar/data/bookkeeper/ledgers
+      # 💡 Fuerza RW en entornos de poco disco (dev)
+      - readOnlyModeEnabled=false
+      - minUsableSizeForHighPriorityWritesMB=0
+      - minUsableSizeForNormalWritesMB=0
+      - diskUsageThreshold=0.99
+      # Memoria
+      - BOOKIE_MEM=-Xms512m -Xmx512m -XX:MaxDirectMemorySize=256m
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    volumes:
+      - bk_data:/pulsar/data
+    command: >
+      bash -lc "
+        mkdir -p /pulsar/data/bookkeeper/journal \
+                /pulsar/data/bookkeeper/ledgers/current &&
+        # Asegura cookie/formato si es un volumen nuevo
+        bin/bookkeeper shell bookieformat -nonInteractive -force || true &&
+        bin/apply-config-from-env.py conf/bookkeeper.conf &&
+        exec bin/pulsar bookie
+      "
+    healthcheck:
+      # Sano = aparece como bookie RW en ZooKeeper
+      test: ["CMD","bash","-lc","bin/bookkeeper shell listbookies -rw 2>/dev/null | grep -E 'bookie|:3181'"]
+      interval: 5s
+      timeout: 3s
+      retries: 60
+
+# --- INIT (antes del broker): inicializa el metastore del cluster ---
+  pulsar-init:
+    image: apachepulsar/pulsar:latest
+    container_name: alpespartner-pulsar-init
+    profiles: ["infrastructure", "pulsar", "alpespartner"]
+    networks: [pulsar]
+    restart: "no"
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    command: [
+      "sh","-lc",
+      "bin/pulsar initialize-cluster-metadata \
+        --cluster cluster-a \
+        --zookeeper zookeeper:2181 \
+        --configuration-store zookeeper:2181 \
+        --web-service-url http://broker:8080 \
+        --broker-service-url pulsar://broker:6650"
+    ]
+
+
+
+  # Start broker
+  broker:
+    image: apachepulsar/pulsar:latest
+    container_name: alpespartner-broker
+    profiles: ["infrastructure", "pulsar", "alpespartner"]
+    hostname: broker
+    restart: on-failure
+    networks:
+      pulsar:
+        aliases: [broker]
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+      bookie:
+        condition: service_healthy
+      pulsar-init:
+        condition: service_completed_successfully
+    ports:
+      - "6650:6650"
+      - "8080:8080"
+    environment:
+      - clusterName=cluster-a
+      - metadataStoreUrl=zk:zookeeper:2181
+      - zookeeperServers=zookeeper:2181
+      - advertisedAddress=broker
+      - advertisedListeners=external:pulsar://alpespartner-broker:6650,external:http://alpespartner-broker:8080
+      - allowAutoSubscriptionCreation=true
+      - allowAutoTopicCreation=true
+      - allowAutoTopicCreationType=non-partitioned
+      - managedLedgerDefaultEnsembleSize=1
+      - managedLedgerDefaultWriteQuorum=1
+      - managedLedgerDefaultAckQuorum=1
+      - brokerDeleteInactiveTopicsEnabled=false
+      - PULSAR_MEM=-Xms512m -Xmx512m -XX:MaxDirectMemorySize=256m
+    command: >
+      bash -lc "
+        bin/apply-config-from-env.py conf/broker.conf &&
+        bin/pulsar broker
+      "
+    healthcheck:
+      test: ["CMD","bash","-lc","curl -fsS http://localhost:8080/admin/v2/brokers/health >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+    #command: bash -c "bin/apply-config-from-env.py conf/broker.conf
+    #  &&  exec bin/pulsar broker"
+
+
+  # ==========================================
+  # BASES DE DATOS - UNA POR MICROSERVICIO
+  # ==========================================
+  
+  # Base de datos para campanias
+  campanias-db:
+    image: mysql:8
+    hostname: campanias-mysql
+    container_name: campanias-mysql
+    profiles: ["infrastructure", "database", "alpespartner", "campanias"]
+    cap_add:
+      - SYS_NICE
+    restart: always
+    environment:
+      - MYSQL_DATABASE=campanias
+      - MYSQL_ROOT_PASSWORD=adminadmin
+      - MYSQL_USER=campanias
+      - MYSQL_PASSWORD=campanias123
+    networks:
+      - alpespartner
+    ports:
+      - '3307:3306'
+    volumes:
+      - campanias_mysql_data:/var/lib/mysql
+      - ./init-campanias.sql:/docker-entrypoint-initdb.d/init.sql
+
+  # Base de datos para Afiliados  
+  afiliados-db:
+    image: mysql:8
+    hostname: afiliados-mysql
+    container_name: afiliados-mysql
+    profiles: ["infrastructure", "database", "alpespartner", "afiliados"]
+    cap_add:
+      - SYS_NICE
+    restart: always
+    environment:
+      - MYSQL_DATABASE=afiliados
+      - MYSQL_ROOT_PASSWORD=adminadmin
+      - MYSQL_USER=afiliados
+      - MYSQL_PASSWORD=afiliados123
+    networks:
+      - alpespartner
+    ports:
+      - '3308:3306'
+    volumes:
+      - afiliados_mysql_data:/var/lib/mysql
+      - ./init-afiliados.sql:/docker-entrypoint-initdb.d/init.sql
+
+  # Base de datos para Comisiones
+  comisiones-db:
+    image: mysql:8
+    hostname: comisiones-mysql
+    container_name: comisiones-mysql
+    profiles: ["infrastructure", "database", "alpespartner", "comisiones"]
+    cap_add:
+      - SYS_NICE
+    restart: always
+    environment:
+      - MYSQL_DATABASE=comisiones
+      - MYSQL_ROOT_PASSWORD=adminadmin
+      - MYSQL_USER=comisiones
+      - MYSQL_PASSWORD=comisiones123
+    networks:
+      - alpespartner
+    ports:
+      - '3309:3306'
+    volumes:
+      - comisiones_mysql_data:/var/lib/mysql
+      - ./init-comisiones.sql:/docker-entrypoint-initdb.d/init.sql
+
+  # Base de datos para Conversiones
+  conversiones-db:
+    image: mysql:8
+    hostname: conversiones-mysql
+    container_name: conversiones-mysql
+    profiles: ["infrastructure", "database", "alpespartner", "conversiones"]
+    cap_add:
+      - SYS_NICE
+    restart: always
+    environment:
+      - MYSQL_DATABASE=conversiones
+      - MYSQL_ROOT_PASSWORD=adminadmin
+      - MYSQL_USER=conversiones
+      - MYSQL_PASSWORD=conversiones123
+    networks:
+      - alpespartner
+    ports:
+      - '3310:3306'
+    volumes:
+      - conversiones_mysql_data:/var/lib/mysql
+      - ./init-conversiones.sql:/docker-entrypoint-initdb.d/init.sql
+
+  # Base de datos para Notificaciones
+  notificaciones-db:
+    image: mysql:8
+    hostname: notificaciones-mysql
+    container_name: notificaciones-mysql
+    profiles: ["infrastructure", "database", "alpespartner", "notificaciones"]
+    cap_add:
+      - SYS_NICE
+    restart: always
+    environment:
+      - MYSQL_DATABASE=notificaciones
+      - MYSQL_ROOT_PASSWORD=adminadmin
+      - MYSQL_USER=notificaciones
+      - MYSQL_PASSWORD=notificaciones123
+    networks:
+      - alpespartner
+    ports:
+      - '3311:3306'
+    volumes:
+      - notificaciones_mysql_data:/var/lib/mysql
+      - ./init-notificaciones.sql:/docker-entrypoint-initdb.d/init.sql
+
+  # Base de datos para Sagas
+  sagas-db:
+    image: mysql:8
+    hostname: sagas-mysql
+    container_name: sagas-mysql
+    profiles: ["infrastructure", "database", "alpespartner", "sagas"]
+    cap_add:
+      - SYS_NICE
+    restart: always
+    environment:
+      - MYSQL_DATABASE=sagas
+      - MYSQL_ROOT_PASSWORD=adminadmin
+      - MYSQL_USER=sagas
+      - MYSQL_PASSWORD=sagas123
+    networks:
+      - alpespartner
+    ports:
+      - '3312:3306'
+    volumes:
+      - sagas_mysql_data:/var/lib/mysql
+      - ./init-sagas.sql:/docker-entrypoint-initdb.d/init.sql
+  # ==========================================
+  # BFF (Backend for Frontend)
+  # ==========================================
+  bff:
+    build:
+      context: .
+      dockerfile: bff.Dockerfile
+    container_name: alpespartner-bff
+    hostname: bff
+    profiles: ["alpespartner", "bff"]
+    networks: [alpespartner, pulsar]
+    restart: on-failure
+    depends_on:
+      broker:
+        condition: service_healthy
+      campanias:
+        condition: service_started
+    environment:
+      - PULSAR_HOST=broker
+      - CAMPANIAS_URL=http://campanias:8000
+      - AFILIADOS_URL=http://afiliados:8000
+      - COMISIONES_URL=http://comisiones:8000
+      - CONVERSIONES_URL=http://conversiones:8000
+      - NOTIFICACIONES_URL=http://notificaciones-alpespartner:8000
+      - BFF_PORT=8000
+      - HTTP_TIMEOUT=30
+      - HTTP_RETRIES=3
+    ports:
+      - "8001:8000"
+    volumes:
+      - ./src-alpespartner:/src-alpespartner
+    command: ["uvicorn", "bff.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+
+  # ==========================================
+  # Microservicio de campanias
+  # ==========================================
+  campanias:
+    build:
+      context: .
+      dockerfile: campanias.Dockerfile
+    container_name: alpespartner-campanias
+    hostname: campanias
+    profiles: ["alpespartner", "campanias"]
+    networks: [alpespartner, pulsar]
+    restart: on-failure
+    depends_on:
+      broker:
+        condition: service_healthy
+      campanias-db:
+        condition: service_started
+      sagas-db:
+        condition: service_started
+    environment:
+      - PULSAR_HOST=broker
+      # (si tu código usa BROKER_HOST en utils, duplícalo)
+      - BROKER_HOST=broker
+      - PULSAR_ADDRESS=broker
+      - DATABASE_URL=mysql+pymysql://campanias:campanias123@campanias-mysql:3306/campanias
+      - DB_HOST=campanias-mysql
+      - DB_PORT=3306
+      - DB_NAME=campanias
+      - DB_USER=campanias
+      - DB_PASSWORD=campanias123
+      - SAGAS_STORAGE_TYPE=mysql
+      - SAGAS_DB_URL=mysql+pymysql://root:adminadmin@sagas-mysql:3306/sagas?charset=utf8mb4
+    ports:
+      - "8002:8000"
+    volumes:
+      - ./src-alpespartner:/src-alpespartner
+    command: ["uvicorn","campanias.main:app","--host","0.0.0.0","--port","8000","--reload"]
+
+  # ==========================================
+  # Microservicio de Afiliados
+  # ==========================================
+  afiliados:
+    build:
+      context: .
+      dockerfile: afiliados.Dockerfile
+    container_name: alpespartner-afiliados
+    hostname: afiliados
+    profiles: ["alpespartner", "afiliados"]
+    networks:
+      - alpespartner
+      - pulsar
+    environment:
+      - PULSAR_HOST=broker
+      - BROKER_HOST=broker
+      - PULSAR_ADDRESS=broker
+      - DATABASE_URL=mysql+pymysql://afiliados:afiliados123@afiliados-mysql:3306/afiliados
+      - DB_HOST=afiliados-mysql
+      - DB_PORT=3306
+      - DB_NAME=afiliados
+      - DB_USER=afiliados
+      - DB_PASSWORD=afiliados123
+      - PULSAR_PORT=6650
+      - APP_HOST=0.0.0.0
+      - APP_PORT=8000
+    ports:
+      - "8003:8000"
+    depends_on:
+      broker:
+        condition: service_healthy
+      afiliados-db:
+        condition: service_started
+    restart: on-failure
+    volumes:
+      - ./src-alpespartner/afiliados:/app
+    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+
+  # ==========================================
+  # Microservicio de Comisiones
+  # ==========================================
+  comisiones:
+    build:
+      context: .
+      dockerfile: comisiones.Dockerfile
+    container_name: alpespartner-comisiones
+    hostname: comisiones
+    profiles: ["alpespartner", "comisiones"]
+    networks:
+      - alpespartner
+      - pulsar
+    environment:
+      - PULSAR_HOST=broker
+      - BROKER_HOST=broker
+      - PULSAR_ADDRESS=broker
+      - PULSAR_PORT=6650
+      - DATABASE_URL=mysql+pymysql://comisiones:comisiones123@comisiones-mysql:3306/comisiones
+      - MYSQL_HOST=comisiones-mysql
+      - MYSQL_USER=comisiones
+      - MYSQL_PASSWORD=comisiones123
+      - MYSQL_DATABASE=comisiones
+    ports:
+      - "8004:8000"
+    depends_on:
+      broker:
+        condition: service_healthy
+      comisiones-db:
+        condition: service_started
+    restart: on-failure
+    volumes:
+      - ./src-alpespartner/comisiones:/app
+    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+
+  # ==========================================
+  # Microservicio de Conversiones
+  # ==========================================
+  conversiones:
+    build:
+      context: .
+      dockerfile: conversiones.Dockerfile
+    container_name: alpespartner-conversiones
+    hostname: conversiones
+    profiles: ["alpespartner", "conversiones"]
+    networks:
+      - alpespartner
+      - pulsar
+    environment:
+      - PULSAR_HOST=broker
+      - BROKER_HOST=broker
+      - PULSAR_ADDRESS=broker
+      - DATABASE_URL=mysql+pymysql://conversiones:conversiones123@conversiones-mysql:3306/conversiones
+      - DB_HOST=conversiones-mysql
+      - DB_PORT=3306
+      - DB_NAME=conversiones
+      - DB_USER=conversiones
+      - DB_PASSWORD=conversiones123
+      - PULSAR_PORT=6650
+      - APP_HOST=0.0.0.0
+      - APP_PORT=8000
+    ports:
+      - "8005:8000"
+    depends_on:
+      broker:
+        condition: service_healthy
+      conversiones-db:
+        condition: service_started
+    restart: on-failure
+    volumes:
+      - ./src-alpespartner/conversiones:/app
+    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+
+  # ==========================================
+  # Microservicio de Notificaciones
+  # ==========================================
+  notificaciones-alpespartner:
+    build:
+      context: .
+      dockerfile: notificaciones-alpespartner.Dockerfile
+    container_name: alpespartner-notificaciones
+    hostname: notificaciones-alpespartner
+    profiles: ["alpespartner", "notificaciones"]
+    networks:
+      - alpespartner
+      - pulsar
+    environment:
+      - PULSAR_HOST=broker
+      - BROKER_HOST=broker
+      - PULSAR_ADDRESS=broker
+      - DATABASE_URL=mysql+pymysql://notificaciones:notificaciones123@notificaciones-mysql:3306/notificaciones
+      - DB_HOST=notificaciones-mysql
+      - DB_PORT=3306
+      - DB_NAME=notificaciones
+      - DB_USER=notificaciones
+      - DB_PASSWORD=notificaciones123
+      - PULSAR_PORT=6650
+      - APP_HOST=0.0.0.0
+      - APP_PORT=8000
+    ports:
+      - "8006:8000"
+    depends_on:
+      broker:
+        condition: service_healthy
+      notificaciones-db:
+        condition: service_started
+    restart: on-failure
+    volumes:
+      - ./src-alpespartner/notificaciones:/app
+    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+
+
+volumes:
+  zk_data:
+  bk_data:
+  alpespartner_zookeeper_data:
+  alpespartner_bookkeeper_data:
+  campanias_mysql_data:
+  afiliados_mysql_data:
+  comisiones_mysql_data:
+  conversiones_mysql_data:
+  notificaciones_mysql_data:
+  sagas_mysql_data:

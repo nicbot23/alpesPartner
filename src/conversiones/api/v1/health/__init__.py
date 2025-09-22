@@ -1,3 +1,0 @@
-"""
-Inicialización módulo health
-"""

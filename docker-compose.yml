@@ -1,399 +1,226 @@
-version: "3.9"
-
-# Red personalizada para comunicación entre servicios
 networks:
-  alpes-network:
-    driver: bridge
-
-# Volúmenes para persistencia
-volumes:
-  mysql-data:
-  mysql-conversiones-data:
-  mysql-afiliados-data:
-  pulsar-data:
-  redis-data:
-
-services:
-  # =============================================================================
-  # INFRAESTRUCTURA DE DATOS - MYSQL PARA CADA MICROSERVICIO
-  # =============================================================================
-  
-  # Base de datos principal - Marketing (Campañas, Comisiones)
-  mysql-marketing:
-    image: mysql:8.0
-    container_name: alpes-mysql-marketing
-    environment:
-      MYSQL_ROOT_PASSWORD: debezium
-      MYSQL_DATABASE: alpes_marketing
-      MYSQL_USER: alpes
-      MYSQL_PASSWORD: alpes
-    command: [
-      "mysqld",
-      "--server-id=223344",
-      "--log-bin=mysql-bin",
-      "--binlog_format=ROW", 
-      "--binlog_row_image=FULL",
-      "--gtid_mode=ON",
-      "--enforce_gtid_consistency=ON"
-    ]
-    ports:
-      - "3306:3306"
-    volumes:
-      - mysql-data:/var/lib/mysql
-      - "./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro"
-    networks:
-      - alpes-network
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
-      timeout: 20s
-      retries: 10
-  
-  # Base de datos Conversiones
-  mysql-conversiones:
-    image: mysql:8.0
-    container_name: alpes-mysql-conversiones
-    environment:
-      MYSQL_ROOT_PASSWORD: debezium
-      MYSQL_DATABASE: alpes_conversiones
-      MYSQL_USER: alpes
-      MYSQL_PASSWORD: alpes
-    command: [
-      "mysqld",
-      "--server-id=223345",
-      "--log-bin=mysql-bin",
-      "--binlog_format=ROW",
-      "--binlog_row_image=FULL", 
-      "--gtid_mode=ON",
-      "--enforce_gtid_consistency=ON"
-    ]
-    ports:
-      - "3307:3306"
-    volumes:
-      - mysql-conversiones-data:/var/lib/mysql
-      - "./db/conversiones_init.sql:/docker-entrypoint-initdb.d/conversiones_init.sql:ro"
-    networks:
-      - alpes-network
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
-      timeout: 20s
-      retries: 10
-  
-  # Base de datos Afiliados
-  mysql-afiliados:
-    image: mysql:8.0
-    container_name: alpes-mysql-afiliados
-    environment:
-      MYSQL_ROOT_PASSWORD: debezium
-      MYSQL_DATABASE: alpes_afiliados
-      MYSQL_USER: alpes
-      MYSQL_PASSWORD: alpes
-    command: [
-      "mysqld",
-      "--server-id=223346", 
-      "--log-bin=mysql-bin",
-      "--binlog_format=ROW",
-      "--binlog_row_image=FULL",
-      "--gtid_mode=ON",
-      "--enforce_gtid_consistency=ON"
-    ]
-    ports:
-      - "3308:3306"
-    volumes:
-      - mysql-afiliados-data:/var/lib/mysql
-      - "./db/afiliados_init.sql:/docker-entrypoint-initdb.d/afiliados_init.sql:ro"
-    networks:
-      - alpes-network
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
-      timeout: 20s
-      retries: 10
-
-  # Redis para cache
-  redis:
-    image: redis:7-alpine
-    container_name: alpes-redis
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis-data:/data
-    networks:
-      - alpes-network
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      timeout: 10s
-      retries: 5
-
-  # =============================================================================
-  # APACHE PULSAR - EVENT STREAMING
-  # =============================================================================
-  
   pulsar:
-    image: apachepulsar/pulsar:3.1.2
-    container_name: alpes-pulsar
-    command: bash -c "/pulsar/scripts/init_pulsar_topics.sh"
-    environment:
-      - PULSAR_MEM=-Xms512m -Xmx1024m -XX:MaxDirectMemorySize=1024m
-      - PULSAR_STANDALONE_USE_ZOOKEEPER=1
-    ports:
-      - "6650:6650"  # Pulsar broker
-      - "8080:8080"  # Pulsar admin
-    volumes:
-      - pulsar-data:/pulsar/data
-      - "./connectors/pulsar:/pulsar/connectors"
-      - "./scripts/init_pulsar_topics.sh:/pulsar/scripts/init_pulsar_topics.sh:ro"
+    driver: bridge
+  sidecar:
+    driver: bridge
+services:
+# Start zookeeper
+  zookeeper:
+    image: apachepulsar/pulsar:latest
+    profiles: ["pulsar"]
+    container_name: zookeeper
+    restart: on-failure
     networks:
-      - alpes-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/admin/v2/clusters"]
-      timeout: 30s
-      retries: 15
-      start_period: 45s
-
-  # =============================================================================
-  # MICROSERVICIOS
-  # =============================================================================
-  
-  # Microservicio Afiliados
-  afiliados:
-    build:
-      context: .
-      dockerfile: src/afiliados.Dockerfile
-    container_name: alpes-afiliados
-    environment:
-      # Base de datos
-      DATABASE_URL: mysql+pymysql://alpes:alpes@mysql-afiliados:3306/alpes_afiliados
-      DB_HOST: mysql-afiliados
-      DB_PORT: 3306
-      DB_NAME: alpes_afiliados
-      DB_USER: alpes
-      DB_PASSWORD: alpes
-      
-      # Apache Pulsar
-      PULSAR_URL: pulsar://pulsar:6650
-      PULSAR_HOST: pulsar
-      PULSAR_PORT: 6650
-      PULSAR_TENANT: public
-      PULSAR_NAMESPACE: default
-      
-      # Cache Redis
-      REDIS_URL: redis://redis:6379/0
-      
-      # Configuración aplicación
-      APP_HOST: 0.0.0.0
-      APP_PORT: 8000
-      LOG_LEVEL: INFO
-      ENVIRONMENT: development
-      
-      # Eventos
-      AFILIADOS_EVENTS_TOPIC: persistent://public/default/afiliados.eventos
-      COMISIONES_EVENTS_TOPIC: persistent://public/default/marketing.comisiones.eventos
-    ports:
-      - "8001:8000"
-    volumes:
-      - "./src:/app/src"
-      - "./data:/app/data"
-    depends_on:
-      mysql-afiliados:
-        condition: service_healthy
-      pulsar:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    networks:
-      - alpes-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      timeout: 10s
-      retries: 5
-      start_period: 30s
-  
-  # Microservicio Conversiones
-  conversiones:
-    build:
-      context: .
-      dockerfile: src/conversiones.Dockerfile
-    container_name: alpes-conversiones
-    environment:
-      # Base de datos
-      DATABASE_URL: mysql+pymysql://alpes:alpes@mysql-conversiones:3306/alpes_conversiones
-      DB_HOST: mysql-conversiones
-      DB_PORT: 3306
-      DB_NAME: alpes_conversiones
-      DB_USER: alpes
-      DB_PASSWORD: alpes
-      
-      # Apache Pulsar
-      PULSAR_URL: pulsar://pulsar:6650
-      PULSAR_HOST: pulsar
-      PULSAR_PORT: 6650
-      PULSAR_TENANT: public
-      PULSAR_NAMESPACE: default
-      
-      # Cache Redis
-      REDIS_URL: redis://redis:6379/1
-      
-      # Configuración aplicación
-      APP_HOST: 0.0.0.0
-      APP_PORT: 8000
-      LOG_LEVEL: INFO
-      ENVIRONMENT: development
-      
-      # Eventos
-      CONVERSIONES_EVENTS_TOPIC: persistent://public/default/conversiones.eventos
-      MARKETING_EVENTS_TOPIC: persistent://public/default/marketing.comisiones.eventos
-      AFILIADOS_EVENTS_TOPIC: persistent://public/default/afiliados.eventos
-    ports:
-      - "8002:8000"
-    volumes:
-      - "./src:/app/src"
-      - "./data:/app/data"
-    depends_on:
-      mysql-conversiones:
-        condition: service_healthy
-      pulsar:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    networks:
-      - alpes-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      timeout: 10s
-      retries: 5
-      start_period: 30s
-  
-  # Microservicio Marketing (Coordinador Central)
-  marketing:
-    build:
-      context: .
-      dockerfile: src/marketing.Dockerfile
-    container_name: alpes-marketing
-    environment:
-      # Base de datos
-      DATABASE_URL: mysql+pymysql://alpes:alpes@mysql-marketing:3306/alpes_marketing
-      DB_HOST: mysql-marketing
-      DB_PORT: 3306
-      DB_NAME: alpes_marketing
-      DB_USER: alpes
-      DB_PASSWORD: alpes
-      
-      # Apache Pulsar
-      PULSAR_URL: pulsar://pulsar:6650
-      PULSAR_HOST: pulsar
-      PULSAR_PORT: 6650
-      PULSAR_TENANT: public
-      PULSAR_NAMESPACE: default
-      
-      # Cache Redis
-      REDIS_URL: redis://redis:6379/2
-      
-      # Configuración aplicación
-      APP_HOST: 0.0.0.0
-      APP_PORT: 8000
-      LOG_LEVEL: INFO
-      ENVIRONMENT: development
-      
-      # Eventos
-      MARKETING_EVENTS_TOPIC: persistent://public/default/marketing.eventos
-      COMISIONES_EVENTS_TOPIC: persistent://public/default/marketing.comisiones.eventos
-      AFILIADOS_EVENTS_TOPIC: persistent://public/default/afiliados.eventos
-      CONVERSIONES_EVENTS_TOPIC: persistent://public/default/conversiones.eventos
-    ports:
-      - "8003:8000"
-    volumes:
-      - "./src:/app/src"
-      - "./data:/app/data"
-    depends_on:
-      mysql-marketing:
-        condition: service_healthy
-      pulsar:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    networks:
-      - alpes-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      timeout: 10s
-      retries: 5
-      start_period: 30s
-
-  # Backend For Frontend (BFF)
-  bff:
-    image: python:3.11-slim
-    container_name: alpes-bff
-    working_dir: /app
-    environment:
-      PULSAR_URL: pulsar://pulsar:6650
-      CAMPANAS_COMMANDS_TOPIC: persistent://public/default/marketing.campanas.comandos
-      MARKETING_EVENTS_TOPIC: persistent://public/default/marketing.eventos
-      COMISIONES_EVENTS_TOPIC: persistent://public/default/marketing.comisiones.eventos
-    command: ["bash", "-c", "pip install fastapi uvicorn pulsar-client && uvicorn src.bff.main:app --host 0.0.0.0 --port 9000"]
-    ports:
-      - "9000:9000"
-    volumes:
-      - ./src:/app/src
-    depends_on:
-      pulsar:
-        condition: service_healthy
-    networks:
-      - alpes-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/health"]
-      timeout: 10s
-      retries: 5
-      start_period: 30s
-
-  # =============================================================================
-  # HERRAMIENTAS DE MONITOREO Y ADMINISTRACIÓN
-  # =============================================================================
-  
-  # Pulsar Manager para administración web de Pulsar
-  pulsar-manager:
-    image: apachepulsar/pulsar-manager:v0.3.0
-    container_name: alpes-pulsar-manager
-    environment:
-      SPRING_CONFIGURATION_FILE: /pulsar-manager/pulsar-manager/application.properties
-      REDIRECT_HOST: http://localhost
-      REDIRECT_PORT: 9527
-      DRIVER_CLASS_NAME: org.postgresql.Driver
-      URL: jdbc:postgresql://127.0.0.1:5432/pulsar_manager
-      USERNAME: pulsar
-      PASSWORD: pulsar
-    ports:
-      - "9527:9527"
-    depends_on:
       - pulsar
-    networks:
-      - alpes-network
-
-  # Redis Commander para administración web de Redis
-  redis-commander:
-    image: rediscommander/redis-commander:latest
-    container_name: alpes-redis-commander
+    volumes:
+      - ./data/zookeeper:/pulsar/data/zookeeper
     environment:
-      REDIS_HOSTS: local:redis:6379
-    ports:
-      - "8081:8081"
-    depends_on:
-      - redis
-    networks:
-      - alpes-network
+      - metadataStoreUrl=zk:zookeeper:2181
+    command: >
+      bash -c "bin/apply-config-from-env.py conf/zookeeper.conf && \
+             bin/generate-zookeeper-config.sh conf/zookeeper.conf && \
+             exec bin/pulsar zookeeper"
+    healthcheck:
+      test: ["CMD", "bin/pulsar-zookeeper-ruok.sh"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
 
-  # phpMyAdmin para administración de bases de datos
-  phpmyadmin:
-    image: phpmyadmin/phpmyadmin:latest
-    container_name: alpes-phpmyadmin
-    environment:
-      PMA_ARBITRARY: 1
-      PMA_HOSTS: mysql-marketing,mysql-conversiones,mysql-afiliados
-      PMA_USER: alpes
-      PMA_PASSWORD: alpes
-    ports:
-      - "8082:80"
-    depends_on:
-      - mysql-marketing
-      - mysql-conversiones
-      - mysql-afiliados
+# Init cluster metadata
+  pulsar-init:
+    container_name: pulsar-init
+    hostname: pulsar-init
+    image: apachepulsar/pulsar:latest
+    profiles: ["pulsar"]
     networks:
-      - alpes-network
+      - pulsar
+    command: bin/pulsar initialize-cluster-metadata --cluster cluster-a --zookeeper zookeeper:2181 --configuration-store zookeeper:2181 --web-service-url http://broker:8080 --broker-service-url pulsar://broker:6650
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+
+# Start bookie
+  bookie:
+    image: apachepulsar/pulsar:latest
+    profiles: ["pulsar"]
+    container_name: bookie
+    restart: on-failure
+    networks:
+      - pulsar
+    environment:
+      - clusterName=cluster-a
+      - zkServers=zookeeper:2181
+      - metadataServiceUri=metadata-store:zk:zookeeper:2181
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+      pulsar-init:
+        condition: service_completed_successfully
+  # Map the local directory to the container to avoid bookie startup failure due to insufficient container disks.
+    volumes:
+      - ./data/bookkeeper:/pulsar/data/bookkeeper
+    command: bash -c "bin/apply-config-from-env.py conf/bookkeeper.conf
+      && exec bin/pulsar bookie"
+
+# Start broker
+  broker:
+    image: apachepulsar/pulsar:latest
+    profiles: ["pulsar"]
+    container_name: broker
+    hostname: broker
+    restart: on-failure
+    networks:
+      - pulsar
+    environment:
+      - metadataStoreUrl=zk:zookeeper:2181
+      - zookeeperServers=zookeeper:2181
+      - clusterName=cluster-a
+      - managedLedgerDefaultEnsembleSize=1
+      - managedLedgerDefaultWriteQuorum=1
+      - managedLedgerDefaultAckQuorum=1
+      - advertisedAddress=broker
+      - advertisedListeners=external:pulsar://127.0.0.1:6650
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+      bookie:
+        condition: service_started
+    ports:
+      - "6650:6650"
+      - "8080:8080"
+    volumes:
+      - ./connectors/pulsar:/pulsar/connectors
+    command: bash -c "bin/apply-config-from-env.py conf/broker.conf
+      &&  exec bin/pulsar broker"
+  
+  # MySQL8
+  db:
+    image: mysql:8
+    hostname: mysqldb
+    container_name: mysqldb
+    cap_add:
+      - SYS_NICE
+    restart: always
+    environment:
+      - MYSQL_DATABASE=reservas
+      - MYSQL_ROOT_PASSWORD=adminadmin
+    profiles: ["aeroalpes", "db"]
+    networks:
+      - pulsar
+    ports:
+      - '3306:3306'
+    volumes:
+      - ./data/mysql:/var/lib/mysql
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql  
+  # Servicios de AeroAlpes
+  aeroalpes:
+    container_name: aeroalpes
+    hostname: aeroalpes
+    image: aeroalpes/flask 
+    profiles: ["aeroalpes", "monolito"]
+    networks:
+      - sidecar
+      - pulsar
+    labels:
+      SidecarDiscover: "false"
+    depends_on:
+      - broker
+      - db
+    environment:
+      - AEROALPES_ADDRESS=aeroalpes
+      - PULSAR_ADDRESS=broker
+    ports:
+      - "5000:5000"
+  adaptador:
+    image: "aeroalpes/adaptador"
+    profiles: ["aeroalpes", "monolito"]
+    container_name: adaptador
+    hostname: adaptador
+    depends_on:
+      - aeroalpes
+    networks:
+      - sidecar
+    environment:
+      - AEROALPES_ADDRESS=aeroalpes
+      - PULSAR_ADDRESS=broker
+    ports:
+      - "50051:50051"
+  
+  # Servicios de Notificación
+  notificacion:
+    container_name: notificacion
+    hostname: notificacion
+    image: aeroalpes/notificacion 
+    profiles: ["aeroalpes", "notificacion"]
+    depends_on:
+      - aeroalpes
+      - broker
+    environment:
+      - AEROALPES_ADDRESS=aeroalpes
+      - PULSAR_ADDRESS=broker
+    networks:
+      - pulsar
+  # Servicio UI
+  ui:
+    container_name: ui
+    hostname: ui
+    image: aeroalpes/ui 
+    profiles: ["aeroalpes", "ui"]
+    depends_on:
+      - aeroalpes
+      - broker
+    environment:
+      - AEROALPES_ADDRESS=aeroalpes
+      - PULSAR_ADDRESS=broker
+    networks:
+      - pulsar
+    ports:
+      - "5678:5678"
+  # Servicio Cliente
+  cliente:
+    container_name: cliente
+    hostname: cliente
+    image: aeroalpes/cliente 
+    profiles: ["aeroalpes", "cliente"]
+    depends_on:
+      - aeroalpes
+      - broker
+    environment:
+      - AEROALPES_ADDRESS=aeroalpes
+      - BROKER_HOST=broker
+    networks:
+      - pulsar
+    ports:
+      - "8000:8000"
+  # Servicio Pagos
+  pagos:
+    container_name: pagos
+    hostname: pagos
+    image: aeroalpes/pagos 
+    profiles: ["aeroalpes", "pagos"]
+    depends_on:
+      - aeroalpes
+      - broker
+    environment:
+      - AEROALPES_ADDRESS=aeroalpes
+      - BROKER_HOST=broker
+    networks:
+      - pulsar
+    ports:
+      - "8001:8001"
+  # Servicio GDS
+  gds:
+    container_name: gds
+    hostname: gds
+    image: aeroalpes/gds 
+    profiles: ["aeroalpes", "gds"]
+    depends_on:
+      - aeroalpes
+      - broker
+    environment:
+      - AEROALPES_ADDRESS=aeroalpes
+      - BROKER_HOST=broker
+    networks:
+      - pulsar
+    ports:
+      - "8002:8002"
