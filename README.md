@@ -64,15 +64,12 @@ docker-compose -f docker-compose-alpespartner.yml ps
 
 Accede a la documentación Swagger de cada microservicio en `/docs`:
 
-| Servicio        | URL                              |
-|-----------------|----------------------------------|
-| BFF             | http://localhost:8001/docs       |
-| Campañas        | http://localhost:8002/docs       |
-| Afiliados       | http://localhost:8003/docs       |
-| Comisiones      | http://localhost:8004/docs       |
-| Conversiones    | http://localhost:8005/docs       |
-| Notificaciones  | http://localhost:8006/docs       |
-| Sagas           | http://localhost:8007/docs       |
+| Servicio        | URL                                  |
+|-----------------|--------------------------------------|
+| BFF             | http://localhost:8001/bff/docs       |
+| Campañas - sagas| http://localhost:8002/docs           |
+| Afiliados       | http://localhost:8003/docs           |
+
 
 ---
 
@@ -85,16 +82,16 @@ Accede a la documentación Swagger de cada microservicio en `/docs`:
 <summary><b>Crear una campaña desde el BFF (curl)</b></summary>
 
 ```bash
-curl -X POST http://localhost:8001/campanias \
-	-H "Content-Type: application/json" \
-	-d '{
-		"nombre": "Campaña Demo",
-		"descripcion": "Prueba end-to-end",
-		"fecha_inicio": "2025-09-22",
-		"fecha_fin": "2025-09-30",
-		"presupuesto": 10000,
-		"comision_porcentaje": 0.10
-	}'
+curl -s -X POST http://localhost:8001/bff/campanias/lanzar-completa \  -H "Content-Type: application/json" \
+  -d '{
+    "nombre":"Campaña con Afiliados FAIL (por segmento)",
+    "descripcion":"Forzar error via segmento",
+    "tipo":"DESCUENTO",
+    "fecha_inicio":"2025-09-19T00:00:00Z",
+    "fecha_fin":"2025-09-30T23:59:59Z",
+    "presupuesto":10000,
+    "segmento_audiencia":"ninguno"
+  }'
 ```
 
 <b>Respuesta esperada:</b>
@@ -112,16 +109,7 @@ curl -X POST http://localhost:8001/campanias \
 <summary><b>Lanzar una saga de campaña (curl)</b></summary>
 
 ```bash
-curl -X POST http://localhost:8007/sagas/campanias \
-	-H "Content-Type: application/json" \
-	-d '{
-		"nombre": "Campaña Saga",
-		"descripcion": "Saga de prueba",
-		"fecha_inicio": "2025-09-22",
-		"fecha_fin": "2025-09-30",
-		"presupuesto": 20000,
-		"comision_porcentaje": 0.15
-	}'
+curl -s http://localhost:8002/api/v1/sagas/$SAGA_ID/progreso | jq . 
 ```
 
 <b>Respuesta esperada:</b>
